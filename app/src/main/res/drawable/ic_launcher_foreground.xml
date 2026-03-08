@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Scale down slightly to fit the strict 72dp mask safe zone perfectly -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.65"
+        android:scaleY="0.65">
+
+        <!-- Top hammer/button -->
+        <path
+            android:pathData="M 54,32 L 54,26 M 50,26 L 58,26"
+            android:strokeWidth="5"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+
+        <!-- Clock body (Stroke) -->
+        <path
+            android:pathData="M 54,32 A 22,22 0 1,0 54,76 A 22,22 0 1,0 54,32"
+            android:strokeWidth="5.5"
+            android:strokeColor="#FFFFFF"
+            android:fillColor="#00000000" />
+
+        <!-- Checkmark (Stroke) -->
+        <path
+            android:pathData="M 44,53 L 51,60 L 65,46"
+            android:strokeWidth="5.5"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000" />
+
+        <!-- Left Leg -->
+        <path
+            android:pathData="M 40,73 L 35,82"
+            android:strokeWidth="5.5"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round" />
+
+        <!-- Right Leg -->
+        <path
+            android:pathData="M 68,73 L 73,82"
+            android:strokeWidth="5.5"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round" />
+
+        <!-- Left Bell -->
+        <group
+            android:pivotX="38"
+            android:pivotY="38"
+            android:rotation="-40">
+            <path
+                android:pathData="M 29,38 A 9,9 0 0,1 47,38 Z"
+                android:fillColor="#FFFFFF" />
+        </group>
+
+        <!-- Right Bell & Waves -->
+        <group
+            android:pivotX="70"
+            android:pivotY="38"
+            android:rotation="40">
+            <path
+                android:pathData="M 61,38 A 9,9 0 0,1 79,38 Z"
+                android:fillColor="#FFFFFF" />
+
+            <!-- Waves emitting from Right Bell -->
+            <path
+                android:pathData="M 60.1,28.1 A 14,14 0 0,1 79.9,28.1"
+                android:strokeWidth="4"
+                android:strokeColor="#FF9800"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+
+            <path
+                android:pathData="M 55.9,23.9 A 20,20 0 0,1 84.1,23.9"
+                android:strokeWidth="4"
+                android:strokeColor="#FF9800"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+
+            <path
+                android:pathData="M 51.6,19.6 A 26,26 0 0,1 88.4,19.6"
+                android:strokeWidth="4"
+                android:strokeColor="#FF9800"
+                android:strokeLineCap="round"
+                android:fillColor="#00000000" />
+        </group>
+
+    </group>
+
+</vector>
