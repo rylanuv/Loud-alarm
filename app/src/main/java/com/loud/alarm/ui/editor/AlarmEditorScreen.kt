@@ -1,6 +1,9 @@
-﻿package com.loud.alarm.ui.editor
+package com.loud.alarm.ui.editor
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -27,6 +30,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +45,47 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Wash
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Hotel
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.LocalDrink
+import androidx.compose.material.icons.filled.Coffee
+import androidx.compose.material.icons.filled.LocalDining
+import androidx.compose.material.icons.filled.SportsMma
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Yard
+import androidx.compose.material.icons.filled.Laptop
+import androidx.compose.material.icons.filled.Fastfood
+import androidx.compose.material.icons.filled.LocalBar
+import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.Backpack
+import androidx.compose.material.icons.filled.Chair
+import androidx.compose.material.icons.filled.DoorFront
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -94,6 +139,7 @@ import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.MathDifficulty
 import com.loud.alarm.ui.challenge.CameraPreview
 import com.loud.alarm.ui.challenge.ScannerOverlay
+import com.loud.alarm.ui.theme.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,6 +153,7 @@ fun AlarmEditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val isQrCodePurchased by billingViewModel.isQrCodePurchased.collectAsState()
+    val isSubscribed by billingViewModel.isSubscribed.collectAsState()
     
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.foundation.Image(
@@ -196,10 +243,11 @@ fun AlarmEditorScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    Text(
-                        "▸",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.6f)
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -243,7 +291,12 @@ fun AlarmEditorScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("🔊", fontSize = 22.sp)
+                        Icon(
+                            Icons.Default.VolumeUp,
+                            contentDescription = "Volume",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
@@ -289,16 +342,18 @@ fun AlarmEditorScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     // ──────────────────────────────────────────────────
                     val challengeOptions = listOf(
-                        ChallengeType.NONE to ("💤" to "None"),
-                        ChallengeType.MATH to ("🧮" to "Maths"),
-                        ChallengeType.QR_CODE to ("🔳" to "QR Code"),
-                        ChallengeType.REWRITE to ("✍️" to "Rewrite"),
-                        ChallengeType.STEP to ("👣" to "Steps"),
-                        ChallengeType.MAZE to ("🕹️" to "Maze"),
-                        ChallengeType.MEMORY to ("🧠" to "Memory"),
-                        ChallengeType.SHAKE to ("📳" to "Shake"),
-                        ChallengeType.TYPING to ("⌨️" to "Typing"),
-                        ChallengeType.PUZZLE to ("🧩" to "Puzzle")
+                        ChallengeType.NONE to Triple(Icons.Default.Bedtime, "None", IconBlue),
+                        ChallengeType.MATH to Triple(Icons.Default.Calculate, "Maths", IconRed),
+                        ChallengeType.QR_CODE to Triple(Icons.Default.QrCodeScanner, "QR Code", IconPurple),
+                        ChallengeType.REWRITE to Triple(Icons.Default.Edit, "Rewrite", IconYellow),
+                        ChallengeType.STEP to Triple(Icons.Default.DirectionsWalk, "Steps", IconOrange),
+                        ChallengeType.MAZE to Triple(Icons.Default.Gamepad, "Maze", IconGreen),
+                        ChallengeType.MEMORY to Triple(Icons.Default.Psychology, "Memory", IconPink),
+                        ChallengeType.SHAKE to Triple(Icons.Default.Vibration, "Shake", IconCyan),
+                        ChallengeType.TYPING to Triple(Icons.Default.Keyboard, "Typing", Color.LightGray),
+                        ChallengeType.PUZZLE to Triple(Icons.Default.Extension, "Puzzle", IconIndigo),
+                        ChallengeType.SCAN_SINK to Triple(Icons.Default.Wash, "Scan Sink", IconTeal),
+                        ChallengeType.SCAN_OBJECT to Triple(Icons.Default.CameraAlt, "Scan Object", IconLime)
                     )
                     val columns = 2
                     for (i in challengeOptions.indices step columns) {
@@ -308,9 +363,19 @@ fun AlarmEditorScreen(
                         ) {
                             for (j in 0 until columns) {
                                 if (i + j < challengeOptions.size) {
-                                    val (type, iconTitle) = challengeOptions[i + j]
-                                    val (icon, title) = iconTitle
+                                    val (type, extraArgs) = challengeOptions[i + j]
+                                    val (icon, title, iconColor) = extraArgs
                                     val requiresPurchase = type == ChallengeType.QR_CODE && !isQrCodePurchased
+                                    val requiresSubscription = type in listOf(
+                                        ChallengeType.REWRITE, ChallengeType.STEP,
+                                        ChallengeType.MAZE, ChallengeType.MEMORY,
+                                        ChallengeType.SHAKE, ChallengeType.TYPING,
+                                        ChallengeType.PUZZLE, ChallengeType.SCAN_SINK,
+                                        ChallengeType.SCAN_OBJECT
+                                    ) && !isSubscribed
+                                    
+                                    val isLocked = requiresPurchase || requiresSubscription
+
                                     val selected = uiState.challengeTypes.contains(type)
 
                                     Box(
@@ -327,14 +392,43 @@ fun AlarmEditorScreen(
                                                 shape = RoundedCornerShape(12.dp)
                                             )
                                             .clickable {
-                                                if (requiresPurchase) onNavigateToSubscription()
+                                                if (isLocked) onNavigateToSubscription()
                                                 else viewModel.toggleChallengeType(type)
                                             }
                                             .padding(vertical = 14.dp, horizontal = 8.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(text = icon, fontSize = 24.sp)
+                                            Box {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .clip(CircleShape)
+                                                        .background(
+                                                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                            else iconColor.copy(alpha = 0.2f)
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = icon,
+                                                        contentDescription = title,
+                                                        tint = if (selected) MaterialTheme.colorScheme.primary else iconColor,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                }
+                                                if (isLocked) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Lock,
+                                                        contentDescription = "Locked",
+                                                        tint = Color.White.copy(alpha = 0.8f),
+                                                        modifier = Modifier
+                                                            .size(14.dp)
+                                                            .align(Alignment.BottomEnd)
+                                                            .offset(x = 10.dp, y = 4.dp)
+                                                    )
+                                                }
+                                            }
                                             Spacer(modifier = Modifier.height(6.dp))
                                             Text(
                                                 text = title,
@@ -357,7 +451,7 @@ fun AlarmEditorScreen(
                     // ──────────────────────────────────────────────────
                     if (uiState.challengeTypes.contains(ChallengeType.MATH)) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Difficulty", style = MaterialTheme.typography.titleSmall)
+                        Text("Difficulty", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(8.dp))
                         
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -365,9 +459,9 @@ fun AlarmEditorScreen(
                                 val selected = diff == uiState.mathDifficulty
                                 val (description, example) = when (diff) {
                                     MathDifficulty.EASY -> "Addition & Subtraction" to "e.g.  45 + 32 = ?"
-                                    MathDifficulty.MEDIUM -> "Multi-step expressions" to "e.g.  (23 + 41) Ã— 4 = ?"
-                                    MathDifficulty.HARD -> "Solve for x â€” equations" to "e.g.  3x + 7 = 22,  x = ?"
-                                    MathDifficulty.EXTREME -> "Paper-worthy problems" to "e.g.  347 Ã— 28 = ?  or  7x + 32 Ã— 5 = 811"
+                                    MathDifficulty.MEDIUM -> "Multi-step expressions" to "e.g.  (23 + 41) × 4 = ?"
+                                    MathDifficulty.HARD -> "Solve for x — equations" to "e.g.  3x + 7 = 22,  x = ?"
+                                    MathDifficulty.EXTREME -> "Paper-worthy problems" to "e.g.  347 × 28 = ?  or  7x + 32 × 5 = 811"
                                 }
                                 Box(
                                     modifier = Modifier
@@ -419,7 +513,7 @@ fun AlarmEditorScreen(
                     // ──────────────────────────────────────────────────
                     if (uiState.challengeTypes.contains(ChallengeType.QR_CODE)) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("QR Code Mode", style = MaterialTheme.typography.titleSmall)
+                        Text("QR Code Mode", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(8.dp))
 
                         var showSpecificQrDialog by remember { mutableStateOf(false) }
@@ -445,9 +539,11 @@ fun AlarmEditorScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        "ðŸ“·",
-                                        fontSize = 22.sp
+                                    Icon(
+                                        imageVector = Icons.Default.QrCodeScanner,
+                                        contentDescription = "Any QR Code",
+                                        tint = if (isAnyQrCode) MaterialTheme.colorScheme.primary else Color.White,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
@@ -479,9 +575,11 @@ fun AlarmEditorScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        "ðŸŽ¯",
-                                        fontSize = 22.sp
+                                    Icon(
+                                        imageVector = Icons.Default.GpsFixed,
+                                        contentDescription = "Specific QR Code",
+                                        tint = if (!isAnyQrCode) MaterialTheme.colorScheme.primary else Color.White,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
@@ -584,6 +682,269 @@ fun AlarmEditorScreen(
                             }
                         }
                     }
+
+                    // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.SCAN_SINK)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Scan Sink Setup", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val sinkImagePicker = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.GetContent()
+                        ) { uri: Uri? ->
+                            if (uri != null) {
+                                // Copy image to app's internal storage for persistence
+                                try {
+                                    val inputStream = context.contentResolver.openInputStream(uri)
+                                    val file = java.io.File(context.filesDir, "sink_reference_${System.currentTimeMillis()}.jpg")
+                                    inputStream?.use { input ->
+                                        file.outputStream().use { output ->
+                                            input.copyTo(output)
+                                        }
+                                    }
+                                    viewModel.updateSinkImageUri(file.absolutePath)
+                                    Toast.makeText(context, "Sink image saved!", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+
+                        Column {
+                            Text(
+                                "Take a photo of your sink so we know what to look for!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            if (uiState.sinkImageUri != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                        .border(
+                                            width = 1.dp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .padding(14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    "Sink image captured",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Text(
+                                                "Point your camera at your sink to dismiss",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color.White.copy(alpha = 0.6f)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.White.copy(alpha = 0.1f))
+                                            .clickable { sinkImagePicker.launch("image/*") }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("Change Image", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
+                                            .clickable { viewModel.updateSinkImageUri(null) }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("Remove", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.White.copy(alpha = 0.1f))
+                                        .border(
+                                            width = 1.dp,
+                                            color = Color.White.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable { sinkImagePicker.launch("image/*") }
+                                        .padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = Icons.Default.Wash,
+                                            contentDescription = "Sink",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            "Tap to upload a photo of your sink",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.White.copy(alpha = 0.8f)
+                                        )
+                                        Text(
+                                            "Required to enable this challenge",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.SCAN_OBJECT)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Select Object to Scan", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Pick an object you have at home. You'll need to point your camera at it to dismiss the alarm.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val objectOptions = listOf(
+                            Triple(Icons.Default.Brush, "Toothbrush", IconTeal),
+                            Triple(Icons.Default.Wash, "Sink", IconBlue),
+                            Triple(Icons.Default.Coffee, "Coffee cup", IconOrange),
+                            Triple(Icons.Default.LocalDining, "Bowl", IconRed),
+                            Triple(Icons.Default.SportsMma, "Shoe", IconGreen),
+                            Triple(Icons.Default.MenuBook, "Book", IconPurple),
+                            Triple(Icons.Default.Yard, "Plant", IconLime),
+                            Triple(Icons.Default.Laptop, "Laptop", Color.LightGray),
+                            Triple(Icons.Default.Fastfood, "Fruit", IconYellow),
+                            Triple(Icons.Default.LocalBar, "Bottle", IconCyan),
+                            Triple(Icons.Default.Watch, "Watch", IconIndigo),
+                            Triple(Icons.Default.VpnKey, "Key", IconAmber),
+                            Triple(Icons.Default.Backpack, "Backpack", IconPink),
+                            Triple(Icons.Default.Chair, "Chair", SecondaryOrange),
+                            Triple(Icons.Default.DoorFront, "Door", PrimaryAccent)
+                        )
+
+                        val objColumns = 3
+                        for (i in objectOptions.indices step objColumns) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                for (j in 0 until objColumns) {
+                                    if (i + j < objectOptions.size) {
+                                        val (objIcon, label, iconColor) = objectOptions[i + j]
+                                        val isSelected = uiState.scanObjectLabel.equals(label, ignoreCase = true)
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(
+                                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                    else Color.White.copy(alpha = 0.05f)
+                                                )
+                                                .border(
+                                                    width = 1.dp,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                                    shape = RoundedCornerShape(10.dp)
+                                                )
+                                                .clickable { viewModel.updateScanObjectLabel(label) }
+                                                .padding(vertical = 10.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(
+                                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                            else iconColor.copy(alpha = 0.2f)
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = objIcon,
+                                                        contentDescription = label,
+                                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else iconColor,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    label,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                            if (i + objColumns < objectOptions.size) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+
+                        if (uiState.scanObjectLabel.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Selected: ${uiState.scanObjectLabel}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    "Please select an object",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -640,11 +1001,15 @@ fun AlarmEditorScreen(
                         options.forEach { mins ->
                             val isSelected = uiState.wakeUpCheckMinutes == mins
                             val text = if (mins == 0) "Off" else "${mins}m"
+                            val isLocked = mins > 0 && !isSubscribed
                             
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable { viewModel.updateWakeUpCheckMinutes(mins) }
+                                    .clickable { 
+                                        if (isLocked) onNavigateToSubscription()
+                                        else viewModel.updateWakeUpCheckMinutes(mins) 
+                                    }
                                     .background(
                                         if (isSelected) MaterialTheme.colorScheme.primary
                                         else Color.White.copy(alpha = 0.1f)
@@ -652,12 +1017,23 @@ fun AlarmEditorScreen(
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = text,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                            else Color.White,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = text,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    if (isLocked) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Locked",
+                                            modifier = Modifier.size(12.dp),
+                                            tint = Color.White.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -684,30 +1060,23 @@ fun GlassyCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.15f),
+                        Color.White.copy(alpha = 0.05f)
+                    )
+                ),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(16.dp)
+            )
             .clip(RoundedCornerShape(16.dp))
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.15f),
-                            Color.White.copy(alpha = 0.05f)
-                        )
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(16.dp)
-                )
-        )
         content()
     }
 }
@@ -1006,7 +1375,7 @@ fun RepeatPickerDialog(
                 // ──────────────────────────────────────────────────
                 RepeatOptionRow(
                     label = "Every Day",
-                    subtitle = "Mon â€“ Sun",
+                    subtitle = "Mon – Sun",
                     isSelected = localDays == allDays,
                     onClick = { localDays = allDays }
                 )
@@ -1014,7 +1383,7 @@ fun RepeatPickerDialog(
                 // ──────────────────────────────────────────────────
                 RepeatOptionRow(
                     label = "Weekdays",
-                    subtitle = "Mon â€“ Fri",
+                    subtitle = "Mon – Fri",
                     isSelected = localDays == weekdays,
                     onClick = { localDays = weekdays }
                 )
@@ -1302,9 +1671,11 @@ fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    "📱",
-                    fontSize = 48.sp
+                Icon(
+                    imageVector = Icons.Default.Smartphone,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -1342,12 +1713,12 @@ fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
                     }
                     
                     val steps = listOf(
-                        "⏰" to "Alarm Rings",
-                        "✅" to "You dismiss it",
-                        "🛌" to "Delay minutes pass...",
-                        "📱" to "Notification: Tap to confirm!",
-                        "👆" to "Tap within 5 min → Confirmed!",
-                        "🔔" to "Didn't tap? Alarm rings again!"
+                        Triple(Icons.Default.NotificationsActive, "Alarm Rings", IconOrange),
+                        Triple(Icons.Default.CheckCircle, "You dismiss it", IconGreen),
+                        Triple(Icons.Default.Hotel, "Delay minutes pass...", IconPurple),
+                        Triple(Icons.Default.Smartphone, "Notification: Tap to confirm!", IconBlue),
+                        Triple(Icons.Default.TouchApp, "Tap within 5 min → Confirmed!", IconTeal),
+                        Triple(Icons.Default.NotificationsActive, "Didn't tap? Alarm rings again!", IconRed)
                     )
                     
                     AnimatedContent(
@@ -1358,13 +1729,18 @@ fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
                         },
                         label = "WakeUpAnimation"
                     ) { index ->
-                        val (icon, text) = steps[index]
+                        val (icon, text, stepColor) = steps[index]
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            Text(icon, fontSize = 40.sp)
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = stepColor,
+                                modifier = Modifier.size(40.dp)
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text, 

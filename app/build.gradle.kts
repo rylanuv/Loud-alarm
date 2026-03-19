@@ -7,13 +7,13 @@ plugins {
 
 android {
     namespace = "com.loud.alarm"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.loud.alarm"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
+        targetSdk = 35
+        versionCode = 2
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -30,6 +30,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
     }
     compileOptions {
@@ -90,6 +93,9 @@ dependencies {
     
     // ML Kit Barcode Scanning
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // ML Kit Image Labeling (for Scan Sink / Scan Object challenges)
+    implementation("com.google.mlkit:image-labeling:17.0.9")
 
     // Accompanist (Permissions)
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")

@@ -14,14 +14,18 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -31,6 +35,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.loud.alarm.ui.editor.AlarmEditorScreen
 import com.loud.alarm.ui.home.HomeScreen
+import com.loud.alarm.ui.onboarding.OnboardingScreen
+import com.loud.alarm.ui.onboarding.OnboardingViewModel
 import com.loud.alarm.ui.settings.SettingsScreen
 import com.loud.alarm.ui.subscription.SubscriptionScreen
 import com.loud.alarm.ui.theme.LoudAlarmTheme
@@ -127,6 +133,8 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun AlarmNavigation() {
+    val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+    val onboardingCompleted by onboardingViewModel.onboardingCompleted.collectAsState(initial = null)
     val navController = rememberNavController()
     
     // Request Notification Permission on Android 13+
@@ -139,8 +147,55 @@ fun AlarmNavigation() {
         }
     }
 
-    NavHost(navController = navController, startDestination = "home") {
-        composable("home") {
+    val bootstrapRoute = "bootstrap"
+    val onboardingRoute = "onboarding"
+    val homeRoute = "home"
+
+    fun navigateBackOrFallback() {
+        if (!navController.popBackStack()) {
+            val fallbackRoute = if (onboardingCompleted == false) onboardingRoute else homeRoute
+            navController.navigate(fallbackRoute) {
+                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    NavHost(navController = navController, startDestination = bootstrapRoute) {
+        composable(bootstrapRoute) {
+            LaunchedEffect(onboardingCompleted) {
+                when (onboardingCompleted) {
+                    true -> navController.navigate(homeRoute) {
+                        popUpTo(bootstrapRoute) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                    false -> navController.navigate(onboardingRoute) {
+                        popUpTo(bootstrapRoute) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                    null -> Unit
+                }
+            }
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Loading...", color = Color.White)
+            }
+        }
+
+        composable(onboardingRoute) {
+            OnboardingScreen(
+                onFinished = {
+                    navController.navigate(homeRoute) {
+                        popUpTo(onboardingRoute) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        composable(homeRoute) {
             HomeScreen(
                 onNavigateToEditor = { alarmId ->
                     if (alarmId != null) {
@@ -164,18 +219,18 @@ fun AlarmNavigation() {
             })
         ) {
             AlarmEditorScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navigateBackOrFallback() },
                 onNavigateToSubscription = { navController.navigate("subscription") }
             )
         }
         composable("settings") {
             SettingsScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navigateBackOrFallback() }
             )
         }
         composable("subscription") {
             SubscriptionScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navigateBackOrFallback() }
             )
         }
     }

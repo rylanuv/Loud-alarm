@@ -43,7 +43,7 @@ private val MAZE_LEVELS = listOf(
         ".#.##",
         "....#",
         "###.#",
-        "E..."
+        "E...."
     ),
     listOf(
         "S....",
@@ -58,16 +58,28 @@ private val MAZE_LEVELS = listOf(
 fun MazeChallengeScreen(onSuccess: () -> Unit) {
     val mazeRows = remember { MAZE_LEVELS.random() }
     val height = mazeRows.size
-    val width = mazeRows[0].length
+    val width = mazeRows.maxOfOrNull { it.length } ?: 0
+
+    fun cellAt(r: Int, c: Int): Char {
+        val row = mazeRows.getOrNull(r) ?: return '#'
+        return row.getOrNull(c) ?: '#'
+    }
 
     var startPos by remember { mutableStateOf(Pair(0, 0)) }
-    var endPos by remember { mutableStateOf(Pair(height - 1, width - 1)) }
+    var endPos by remember {
+        mutableStateOf(
+            Pair(
+                (height - 1).coerceAtLeast(0),
+                (width - 1).coerceAtLeast(0)
+            )
+        )
+    }
     
     LaunchedEffect(Unit) {
         for (r in 0 until height) {
-            for (c in 0 until width) {
-                if (mazeRows[r][c] == 'S') startPos = Pair(r, c)
-                if (mazeRows[r][c] == 'E') endPos = Pair(r, c)
+            for (c in mazeRows[r].indices) {
+                if (cellAt(r, c) == 'S') startPos = Pair(r, c)
+                if (cellAt(r, c) == 'E') endPos = Pair(r, c)
             }
         }
     }
@@ -90,7 +102,7 @@ fun MazeChallengeScreen(onSuccess: () -> Unit) {
         if (!isAdjacent) return
         
         // Prevent going into walls
-        if (mazeRows[r][c] == '#') {
+        if (cellAt(r, c) == '#') {
             // Reset to start on hit wall
             path = listOf(startPos)
             return
@@ -139,9 +151,10 @@ fun MazeChallengeScreen(onSuccess: () -> Unit) {
                         modifier = Modifier.fillMaxWidth().weight(1f)
                     ) {
                         for (c in 0 until width) {
-                            val isWall = mazeRows[r][c] == '#'
-                            val isStart = mazeRows[r][c] == 'S'
-                            val isEnd = mazeRows[r][c] == 'E'
+                            val cell = cellAt(r, c)
+                            val isWall = cell == '#'
+                            val isStart = cell == 'S'
+                            val isEnd = cell == 'E'
                             val isPath = path.contains(Pair(r, c))
 
                             val bgColor = when {

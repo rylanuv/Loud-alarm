@@ -41,6 +41,9 @@ class SettingsViewModel @Inject constructor(
 
     val darkModeEnabled: StateFlow<Boolean> = settingsRepository.darkModeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val autoSilenceDuration: StateFlow<Int> = settingsRepository.autoSilenceDuration
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30)
         
     val isPremiumPurchased: StateFlow<Boolean> = billingManager.isQrCodePurchased
 
@@ -83,6 +86,12 @@ class SettingsViewModel @Inject constructor(
     fun setDarkModeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setDarkModeEnabled(enabled)
+        }
+    }
+
+    fun setAutoSilenceDuration(duration: Int) {
+        viewModelScope.launch {
+            settingsRepository.setAutoSilenceDuration(duration)
         }
     }
     

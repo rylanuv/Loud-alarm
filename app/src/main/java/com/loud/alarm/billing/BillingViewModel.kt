@@ -13,8 +13,14 @@ class BillingViewModel @Inject constructor(
 
     val isQrCodePurchased: StateFlow<Boolean> = billingManager.isQrCodePurchased
     val qrCodePrice: StateFlow<String?> = billingManager.qrCodePrice
+    
+    val isSubscribed: StateFlow<Boolean> = billingManager.isSubscribed
 
     fun purchaseQrCode(activity: Activity) {
         billingManager.launchPurchaseFlow(activity)
+    }
+    
+    fun setSubscribed(subscribed: Boolean) {
+        billingManager.setSubscribed(subscribed)
     }
 }

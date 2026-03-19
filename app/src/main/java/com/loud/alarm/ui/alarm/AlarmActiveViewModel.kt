@@ -41,6 +41,8 @@ class AlarmActiveViewModel @Inject constructor(
                 mathDifficulty = alarm.mathDifficulty,
                 barcodeValue = alarm.barcodeValue,
                 isVolumeBoostEnabled = alarm.isVolumeBoostEnabled,
+                sinkImageUri = alarm.sinkImageUri,
+                scanObjectLabel = alarm.scanObjectLabel,
                 enabled = true
             )
             

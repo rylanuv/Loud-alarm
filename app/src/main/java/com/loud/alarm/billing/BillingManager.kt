@@ -42,6 +42,9 @@ class BillingManager @Inject constructor(
     private val _isBillingReady = MutableStateFlow(false)
     val isBillingReady: StateFlow<Boolean> = _isBillingReady.asStateFlow()
 
+    private val _isSubscribed = MutableStateFlow(false)
+    val isSubscribed: StateFlow<Boolean> = _isSubscribed.asStateFlow()
+
     fun initialize() {
         billingClient = BillingClient.newBuilder(context)
             .setListener(this)
@@ -208,6 +211,10 @@ class BillingManager @Inject constructor(
         } else {
             queryExistingPurchases()
         }
+    }
+    
+    fun setSubscribed(subscribed: Boolean) {
+        _isSubscribed.value = subscribed
     }
 
     fun destroy() {

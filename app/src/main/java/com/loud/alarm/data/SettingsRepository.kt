@@ -29,6 +29,8 @@ class SettingsRepository @Inject constructor(
         val FADE_IN_ENABLED = booleanPreferencesKey("fade_in_enabled")
         val FADE_IN_DURATION = intPreferencesKey("fade_in_duration")
         val DARK_MODE_ENABLED = booleanPreferencesKey("dark_mode_enabled")
+        val AUTO_SILENCE_DURATION = intPreferencesKey("auto_silence_duration")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
     val vibrationEnabled: Flow<Boolean> = context.dataStore.data
@@ -64,6 +66,16 @@ class SettingsRepository @Inject constructor(
     val darkModeEnabled: Flow<Boolean> = context.dataStore.data
         .map { preferences: Preferences ->
             preferences[PreferencesKeys.DARK_MODE_ENABLED] ?: false
+        }
+
+    val autoSilenceDuration: Flow<Int> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.AUTO_SILENCE_DURATION] ?: 30
+        }
+
+    val onboardingCompleted: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.ONBOARDING_COMPLETED] ?: false
         }
 
     suspend fun setVibrationEnabled(enabled: Boolean) {
@@ -105,6 +117,18 @@ class SettingsRepository @Inject constructor(
     suspend fun setDarkModeEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences: MutablePreferences ->
             preferences[PreferencesKeys.DARK_MODE_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setAutoSilenceDuration(duration: Int) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.AUTO_SILENCE_DURATION] = duration
+        }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.ONBOARDING_COMPLETED] = completed
         }
     }
 }

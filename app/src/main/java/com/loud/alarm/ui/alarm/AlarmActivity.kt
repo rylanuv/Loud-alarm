@@ -70,6 +70,7 @@ import com.loud.alarm.data.MathDifficulty
 import com.loud.alarm.service.AlarmService
 import com.loud.alarm.ui.challenge.QrCodeChallengeScreen
 import com.loud.alarm.ui.challenge.MathChallengeScreen
+import com.loud.alarm.ui.challenge.ScanChallengeScreen
 import com.loud.alarm.ui.home.formatTime
 import com.loud.alarm.ui.home.getAmPm
 import com.loud.alarm.ui.theme.LoudAlarmTheme
@@ -265,6 +266,8 @@ fun ActiveAlarmScreen(
         var stepSolved by remember { mutableStateOf(false) }
         var mazeSolved by remember { mutableStateOf(false) }
         var memorySolved by remember { mutableStateOf(false) }
+        var scanSinkSolved by remember { mutableStateOf(false) }
+        var scanObjectSolved by remember { mutableStateOf(false) }
         
         var isRingingScreenDismissed by rememberSaveable { mutableStateOf(false) }
 
@@ -282,6 +285,8 @@ fun ActiveAlarmScreen(
                 ChallengeType.STEP -> stepSolved
                 ChallengeType.MAZE -> mazeSolved
                 ChallengeType.MEMORY -> memorySolved
+                ChallengeType.SCAN_SINK -> scanSinkSolved
+                ChallengeType.SCAN_OBJECT -> scanObjectSolved
                 ChallengeType.SHAKE, ChallengeType.TYPING, ChallengeType.PUZZLE -> true // TODO Handle them
                 ChallengeType.NONE -> true
             }
@@ -296,7 +301,9 @@ fun ActiveAlarmScreen(
                 ChallengeType.STEP -> !stepSolved
                 ChallengeType.MAZE -> !mazeSolved
                 ChallengeType.MEMORY -> !memorySolved
-                ChallengeType.SHAKE, ChallengeType.TYPING, ChallengeType.PUZZLE -> false // Already complete effectively
+                ChallengeType.SCAN_SINK -> !scanSinkSolved
+                ChallengeType.SCAN_OBJECT -> !scanObjectSolved
+                ChallengeType.SHAKE, ChallengeType.TYPING, ChallengeType.PUZZLE -> false
                 ChallengeType.NONE -> false
             }
         }
@@ -401,6 +408,39 @@ fun ActiveAlarmScreen(
                         ChallengeType.MEMORY -> {
                             com.loud.alarm.ui.challenge.MemoryChallengeScreen(
                                 onSuccess = { memorySolved = true }
+                            )
+                        }
+                        ChallengeType.SCAN_SINK -> {
+                            Log.d("ActiveAlarmScreen", "Rendering ScanChallengeScreen for SINK")
+                            ScanChallengeScreen(
+                                targetLabel = "Sink",
+                                displayTitle = "Scan Your Sink",
+                                displaySubtitle = "Point the camera at your sink to dismiss",
+                                onSuccess = {
+                                    Log.d("ActiveAlarmScreen", "Scan Sink challenge SOLVED!")
+                                    scanSinkSolved = true
+                                },
+                                onFallbackToMath = {
+                                    Log.d("ActiveAlarmScreen", "User chose math fallback for scan sink")
+                                    scanSinkSolved = true  // fallback skips
+                                }
+                            )
+                        }
+                        ChallengeType.SCAN_OBJECT -> {
+                            val objectLabel = alarm.scanObjectLabel.ifEmpty { "Object" }
+                            Log.d("ActiveAlarmScreen", "Rendering ScanChallengeScreen for OBJECT: $objectLabel")
+                            ScanChallengeScreen(
+                                targetLabel = objectLabel,
+                                displayTitle = "Find the $objectLabel",
+                                displaySubtitle = "Point the camera at a $objectLabel to dismiss",
+                                onSuccess = {
+                                    Log.d("ActiveAlarmScreen", "Scan Object challenge SOLVED! ($objectLabel)")
+                                    scanObjectSolved = true
+                                },
+                                onFallbackToMath = {
+                                    Log.d("ActiveAlarmScreen", "User chose math fallback for scan object")
+                                    scanObjectSolved = true  // fallback skips
+                                }
                             )
                         }
                         else -> {

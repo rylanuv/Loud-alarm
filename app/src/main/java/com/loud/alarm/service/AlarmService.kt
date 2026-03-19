@@ -40,8 +40,6 @@ class AlarmService : Service() {
         const val CHANNEL_ID = "alarm_ringing_v2"
         const val NOTIFICATION_ID = 1
         private const val TAG = "AlarmService"
-        // Auto-stop after 5 minutes to prevent battery drain if user never dismisses
-        private const val AUTO_SILENCE_TIMEOUT_MS = 5 * 60 * 1000L
     }
 
     @Inject
@@ -73,32 +71,36 @@ class AlarmService : Service() {
                 val fadeInDuration = kotlinx.coroutines.runBlocking {
                     settingsRepository.fadeInDuration.first()
                 }
+                val autoSilenceDuration = kotlinx.coroutines.runBlocking {
+                    settingsRepository.autoSilenceDuration.first()
+                }
 
                 Handler(Looper.getMainLooper()).post {
-                    startAlarm(isVolumeBoostEnabled, isVibrationEnabled, isFadeInEnabled, fadeInDuration)
+                    startAlarm(isVolumeBoostEnabled, isVibrationEnabled, isFadeInEnabled, fadeInDuration, autoSilenceDuration)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error reading settings, starting alarm with defaults", e)
                 Handler(Looper.getMainLooper()).post {
-                    startAlarm(isVolumeBoostEnabled, isVibrationEnabled = false, isFadeInEnabled = true, fadeInDuration = 25)
+                    startAlarm(isVolumeBoostEnabled, isVibrationEnabled = false, isFadeInEnabled = true, fadeInDuration = 25, autoSilenceDuration = 30)
                 }
             }
         }.start()
 
         launchAlarmActivity(alarmId)
 
-        // Schedule auto-silence to prevent infinite ringing
-        scheduleAutoSilence()
+        // We will schedule auto silence in startAlarm instead
+        // scheduleAutoSilence()
 
         return START_STICKY
     }
 
-    private fun scheduleAutoSilence() {
+    private fun scheduleAutoSilence(durationMinutes: Int) {
         timeoutHandler.removeCallbacksAndMessages(null)
+        val timeoutMs = durationMinutes * 60 * 1000L
         timeoutHandler.postDelayed({
             Log.w(TAG, "Auto-silencing alarm after timeout — user never dismissed")
             stopSelf()
-        }, AUTO_SILENCE_TIMEOUT_MS)
+        }, timeoutMs)
     }
 
     private fun acquireWakeLock() {
@@ -131,7 +133,7 @@ class AlarmService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("⏰ Alarm Ringing!")
+            .setContentTitle("Alarm Ringing!")
             .setContentText("Tap to solve challenge & dismiss")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -167,7 +169,7 @@ class AlarmService : Service() {
         }
     }
 
-    private fun startAlarm(isVolumeBoostEnabled: Boolean, isVibrationEnabled: Boolean, isFadeInEnabled: Boolean, fadeInDuration: Int) {
+    private fun startAlarm(isVolumeBoostEnabled: Boolean, isVibrationEnabled: Boolean, isFadeInEnabled: Boolean, fadeInDuration: Int, autoSilenceDuration: Int) {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         // Force max alarm volume — this is the #1 reason alarms are "too quiet"
@@ -252,6 +254,8 @@ class AlarmService : Service() {
                 }
             }
         }
+        
+        scheduleAutoSilence(autoSilenceDuration)
     }
 
     private fun launchAlarmActivity(alarmId: Int) {

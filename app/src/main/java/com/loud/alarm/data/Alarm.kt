@@ -6,7 +6,7 @@ import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 
 enum class ChallengeType {
-    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, TYPING, PUZZLE
+    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, TYPING, PUZZLE, SCAN_SINK, SCAN_OBJECT
 }
 
 enum class MathDifficulty {
@@ -29,7 +29,9 @@ data class Alarm(
     val isVolumeBoostEnabled: Boolean = false,
     val wakeUpCheckMinutes: Int = 0,  // 0 = disabled, or 1/2/5/10/15/30 minutes
     val rewriteText: String = "",
-    val stepCount: Int = 30
+    val stepCount: Int = 30,
+    val sinkImageUri: String? = null,       // Reference image URI for scan sink challenge
+    val scanObjectLabel: String = ""         // Selected object label for scan object challenge
 )
 
 class AlarmTypeConverters {

@@ -66,6 +66,8 @@ class AlarmEditorViewModel @Inject constructor(
                     wakeUpCheckMinutes = alarm.wakeUpCheckMinutes,
                     rewriteText = alarm.rewriteText,
                     stepCount = alarm.stepCount,
+                    sinkImageUri = alarm.sinkImageUri,
+                    scanObjectLabel = alarm.scanObjectLabel,
                     timePickerVersion = _uiState.value.timePickerVersion + 1
                 )
             }
@@ -139,6 +141,14 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(stepCount = count)
     }
 
+    fun updateSinkImageUri(uri: String?) {
+        _uiState.value = _uiState.value.copy(sinkImageUri = uri)
+    }
+
+    fun updateScanObjectLabel(label: String) {
+        _uiState.value = _uiState.value.copy(scanObjectLabel = label)
+    }
+
     fun saveAlarm(onSaved: () -> Unit) {
         viewModelScope.launch {
             val state = _uiState.value
@@ -156,6 +166,8 @@ class AlarmEditorViewModel @Inject constructor(
                 wakeUpCheckMinutes = state.wakeUpCheckMinutes,
                 rewriteText = state.rewriteText,
                 stepCount = state.stepCount,
+                sinkImageUri = state.sinkImageUri,
+                scanObjectLabel = state.scanObjectLabel,
                 enabled = true
             )
 
@@ -184,5 +196,7 @@ data class AlarmUiState(
     val wakeUpCheckMinutes: Int = 0,
     val rewriteText: String = "",
     val stepCount: Int = 30,
+    val sinkImageUri: String? = null,
+    val scanObjectLabel: String = "",
     val timePickerVersion: Int = 0
 )

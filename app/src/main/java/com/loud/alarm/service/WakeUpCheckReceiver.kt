@@ -46,10 +46,10 @@ class WakeUpCheckReceiver : BroadcastReceiver() {
         val labelPart = if (alarmLabel.isNotEmpty()) " ($alarmLabel)" else ""
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("☀\uFE0F Wake Up Check!")
+            .setContentTitle("Wake Up Check!")
             .setContentText("Tap this notification to confirm you're awake!$labelPart")
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("Click on this notification to confirm you're awake!$labelPart\nIf you don't tap within 5 minutes, the alarm will ring again! ⏰"))
+                .bigText("Click on this notification to confirm you're awake!$labelPart\nIf you don't tap within 5 minutes, the alarm will ring again!"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

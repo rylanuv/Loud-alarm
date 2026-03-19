@@ -1,8 +1,10 @@
 package com.loud.alarm.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -45,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -64,6 +69,7 @@ fun SettingsScreen(
     val snoozeEnabled by viewModel.snoozeEnabled.collectAsState()
     val fadeInEnabled by viewModel.fadeInEnabled.collectAsState()
     val fadeInDuration by viewModel.fadeInDuration.collectAsState()
+    val autoSilenceDuration by viewModel.autoSilenceDuration.collectAsState()
     
     var showAboutDialog by remember { mutableStateOf(false) }
     var showFadeInWarningDialog by remember { mutableStateOf(false) }
@@ -125,6 +131,18 @@ fun SettingsScreen(
                             subtitle = "Allow snoozing alarms",
                             checked = snoozeEnabled,
                             onCheckedChange = { viewModel.setSnoozeEnabled(it) }
+                        )
+                        
+                        SettingDivider()
+                        
+                        // Auto Silence Slider
+                        SettingSliderItem(
+                            icon = Icons.Default.Notifications,
+                            title = "Auto Silence",
+                            subtitle = "Stop ringing after ${autoSilenceDuration} minutes",
+                            value = autoSilenceDuration.toFloat(),
+                            valueRange = 5f..60f,
+                            onValueChange = { viewModel.setAutoSilenceDuration((kotlin.math.round(it / 5f) * 5f).toInt()) }
                         )
                         
                     }
@@ -270,7 +288,7 @@ fun SettingsScreen(
             },
             title = {
                 Text(
-                    "⚠\uFE0F Are you sure?",
+                    "Are you sure?",
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error
                 )
@@ -278,14 +296,14 @@ fun SettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Disabling fade-in means your alarm will blast at full volume instantly. This can seriously harm your health:",
+                        "Disabling fade-in means your alarm will blast at full volume instantly. This may harm your health:",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     
                     Text(
                         buildAnnotatedString {
                             withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("💓 Cardiovascular Stress: ")
+                                append("Cardiovascular Stress: ")
                             }
                             append("A sudden loud alarm triggers a sharp spike in heart rate and blood pressure, putting extra strain on your heart — especially dangerous over time.")
                         },
@@ -295,9 +313,9 @@ fun SettingsScreen(
                     Text(
                         buildAnnotatedString {
                             withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("😰 Cortisol Spike: ")
+                                append("Hearing Damage: ")
                             }
-                            append("Being jolted awake activates your fight-or-flight response, flooding your body with cortisol. Chronic elevated cortisol leads to anxiety, weight gain, and weakened immunity.")
+                            append("Repeated exposure to sudden loud sounds may cause hearning damage or tinnitus.")
                         },
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -305,19 +323,9 @@ fun SettingsScreen(
                     Text(
                         buildAnnotatedString {
                             withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("👂 Hearing Damage: ")
+                                append("Sleep Inertia: ")
                             }
-                            append("Repeated exposure to sudden loud sounds can damage the delicate hair cells in your inner ear, potentially causing permanent hearing loss or tinnitus.")
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("🧠 Sleep Inertia: ")
-                            }
-                            append("Abrupt awakening worsens grogginess and cognitive impairment, making you feel more tired and less alert throughout the day.")
+                            append("Abrupt awakening worsens grogginess, making you feel more tired and less alert throughout the day.")
                         },
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -416,23 +424,43 @@ fun SectionHeader(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(vertical = 8.dp)
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.95f),
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
     )
 }
 
 @Composable
 fun SettingsCard(content: @Composable () -> Unit) {
+    val cardShape = RoundedCornerShape(22.dp)
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = cardShape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+            containerColor = Color.Transparent
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xC61A181C),
+                            Color(0xB5100F12)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.14f),
+                    shape = cardShape
+                )
+        ) {
+            content()
+        }
     }
 }
 
@@ -447,37 +475,34 @@ fun SettingToggleItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
+        SettingLeadingIcon(icon = icon)
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color.White.copy(alpha = 0.7f)
             )
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                checkedThumbColor = Color(0xFF151312),
+                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.95f),
+                checkedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                uncheckedTrackColor = Color.White.copy(alpha = 0.12f),
+                uncheckedBorderColor = Color.White.copy(alpha = 0.28f)
             )
         )
     }
@@ -495,36 +520,36 @@ fun SettingSliderItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 18.dp, vertical = 16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
+            SettingLeadingIcon(icon = icon)
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White.copy(alpha = 0.7f)
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Slider(
             value = value.coerceIn(valueRange),
             onValueChange = onValueChange,
             valueRange = valueRange,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.95f),
+                inactiveTrackColor = Color.White.copy(alpha = 0.16f)
+            )
         )
     }
 }
@@ -539,30 +564,32 @@ fun SettingClickableItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.03f))
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
+        SettingLeadingIcon(icon = icon)
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color.White.copy(alpha = 0.7f)
             )
         }
+        Text(
+            text = "›",
+            color = Color.White.copy(alpha = 0.5f),
+            style = MaterialTheme.typography.titleLarge
+        )
     }
 }
 
@@ -572,7 +599,45 @@ fun SettingDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .padding(horizontal = 16.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant)
+            .padding(horizontal = 18.dp)
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                        Color.Transparent
+                    )
+                )
+            )
     )
+}
+
+@Composable
+private fun SettingLeadingIcon(icon: ImageVector) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp)
+        )
+    }
 }

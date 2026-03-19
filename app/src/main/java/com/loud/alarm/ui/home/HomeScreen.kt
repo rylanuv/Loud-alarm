@@ -158,32 +158,24 @@ fun NextAlarmCard(nextAlarm: Alarm?, timeUntil: String) {
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Box {
-            // Glassmorphism background effect
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.15f),
-                                Color.White.copy(alpha = 0.05f)
-                            )
+        Box(
+            modifier = Modifier
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.15f),
+                            Color.White.copy(alpha = 0.05f)
                         )
-                    )
-            )
-
-            // Inner border for the glassy effect
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(24.dp)
-                    )
-            )
+                    ),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .clip(RoundedCornerShape(24.dp))
+        ) {
             // Content
             Column(
                 modifier = Modifier
@@ -294,33 +286,24 @@ fun AlarmItemContent(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Box {
-            // Glassmorphism background effect
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.15f),
-                                Color.White.copy(alpha = 0.05f)
-                            )
+        Box(
+            modifier = Modifier
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.15f),
+                            Color.White.copy(alpha = 0.05f)
                         )
-                    )
-            )
-
-            // Inner border for the glassy effect
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(16.dp)
-                    )
-            )
-
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .clip(RoundedCornerShape(16.dp))
+        ) {
             Row(
                 modifier = Modifier
                     .padding(16.dp)
