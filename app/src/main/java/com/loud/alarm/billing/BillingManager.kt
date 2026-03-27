@@ -28,10 +28,24 @@ class BillingManager @Inject constructor(
     companion object {
         private const val TAG = "BillingManager"
         const val PRODUCT_ID_QR_CODE = "qr_code_challenge"
+
+        // Subscription product IDs
+        const val PRODUCT_ID_LIFETIME = "s2w_lifetime"
+        const val PRODUCT_ID_MONTHLY = "s2w_monthly"
+        const val PRODUCT_ID_YEARLY = "s2w_yearly"
+
+        // All subscription-related product IDs for quick lookup
+        val SUBSCRIPTION_PRODUCT_IDS = setOf(PRODUCT_ID_MONTHLY, PRODUCT_ID_YEARLY)
+        val ALL_PREMIUM_PRODUCT_IDS = setOf(PRODUCT_ID_LIFETIME, PRODUCT_ID_MONTHLY, PRODUCT_ID_YEARLY)
     }
 
     private var billingClient: BillingClient? = null
     private var productDetails: ProductDetails? = null
+
+    // Product details for each subscription product
+    private var lifetimeProductDetails: ProductDetails? = null
+    private var monthlyProductDetails: ProductDetails? = null
+    private var yearlyProductDetails: ProductDetails? = null
 
     private val _isQrCodePurchased = MutableStateFlow(false)
     val isQrCodePurchased: StateFlow<Boolean> = _isQrCodePurchased.asStateFlow()
@@ -45,12 +59,27 @@ class BillingManager @Inject constructor(
     private val _isSubscribed = MutableStateFlow(false)
     val isSubscribed: StateFlow<Boolean> = _isSubscribed.asStateFlow()
 
+    // Price flows for each plan
+    private val _lifetimePrice = MutableStateFlow<String?>(null)
+    val lifetimePrice: StateFlow<String?> = _lifetimePrice.asStateFlow()
+
+    private val _monthlyPrice = MutableStateFlow<String?>(null)
+    val monthlyPrice: StateFlow<String?> = _monthlyPrice.asStateFlow()
+
+    private val _yearlyPrice = MutableStateFlow<String?>(null)
+    val yearlyPrice: StateFlow<String?> = _yearlyPrice.asStateFlow()
+
+    // Track which plan is active
+    private val _activePlan = MutableStateFlow<String?>(null)
+    val activePlan: StateFlow<String?> = _activePlan.asStateFlow()
+
     fun initialize() {
         billingClient = BillingClient.newBuilder(context)
             .setListener(this)
             .enablePendingPurchases(
                 PendingPurchasesParams.newBuilder()
                     .enableOneTimeProducts()
+                    .enablePrepaidPlans()
                     .build()
             )
             .build()
@@ -69,7 +98,9 @@ class BillingManager @Inject constructor(
                     _isBillingReady.value = true
                     retryCount = 0
                     queryProductDetails()
+                    querySubscriptionDetails()
                     queryExistingPurchases()
+                    queryExistingSubscriptions()
                 } else {
                     Log.e(TAG, "Billing setup failed: ${billingResult.debugMessage}")
                 }
@@ -78,7 +109,6 @@ class BillingManager @Inject constructor(
             override fun onBillingServiceDisconnected() {
                 Log.d(TAG, "Billing service disconnected")
                 _isBillingReady.value = false
-                // Retry connection with backoff
                 if (retryCount < maxRetries) {
                     retryCount++
                     val delay = (retryCount * 3000).toLong()
@@ -94,9 +124,14 @@ class BillingManager @Inject constructor(
     }
 
     private fun queryProductDetails() {
+        // Query in-app products: QR code + Lifetime
         val productList = listOf(
             QueryProductDetailsParams.Product.newBuilder()
                 .setProductId(PRODUCT_ID_QR_CODE)
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build(),
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_ID_LIFETIME)
                 .setProductType(BillingClient.ProductType.INAPP)
                 .build()
         )
@@ -107,18 +142,74 @@ class BillingManager @Inject constructor(
 
         billingClient?.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                if (productDetailsList.isNotEmpty()) {
-                    productDetails = productDetailsList[0]
-                    _qrCodePrice.value = productDetailsList[0].oneTimePurchaseOfferDetails?.formattedPrice
-                    Log.d(TAG, "Product details loaded: price=${_qrCodePrice.value}")
-                } else {
-                    Log.d(TAG, "No product details found for $PRODUCT_ID_QR_CODE")
-                    // Fallback price for display when product isn't set up in Play Console yet
-                    _qrCodePrice.value = "$2.99"
+                for (details in productDetailsList) {
+                    when (details.productId) {
+                        PRODUCT_ID_QR_CODE -> {
+                            productDetails = details
+                            _qrCodePrice.value = details.oneTimePurchaseOfferDetails?.formattedPrice
+                            Log.d(TAG, "QR Code price: ${_qrCodePrice.value}")
+                        }
+                        PRODUCT_ID_LIFETIME -> {
+                            lifetimeProductDetails = details
+                            _lifetimePrice.value = details.oneTimePurchaseOfferDetails?.formattedPrice
+                            Log.d(TAG, "Lifetime price: ${_lifetimePrice.value}")
+                        }
+                    }
                 }
+                // Fallbacks
+                if (_qrCodePrice.value == null) _qrCodePrice.value = "$2.99"
+                if (_lifetimePrice.value == null) _lifetimePrice.value = "$20.00"
             } else {
-                Log.e(TAG, "Failed to query product details: ${billingResult.debugMessage}")
+                Log.e(TAG, "Failed to query in-app product details: ${billingResult.debugMessage}")
                 _qrCodePrice.value = "$2.99"
+                _lifetimePrice.value = "$20.00"
+            }
+        }
+    }
+
+    private fun querySubscriptionDetails() {
+        val subProductList = listOf(
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_ID_MONTHLY)
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build(),
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_ID_YEARLY)
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build()
+        )
+
+        val params = QueryProductDetailsParams.newBuilder()
+            .setProductList(subProductList)
+            .build()
+
+        billingClient?.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                for (details in productDetailsList) {
+                    when (details.productId) {
+                        PRODUCT_ID_MONTHLY -> {
+                            monthlyProductDetails = details
+                            val offerDetails = details.subscriptionOfferDetails?.firstOrNull()
+                            val pricingPhase = offerDetails?.pricingPhases?.pricingPhaseList?.firstOrNull()
+                            _monthlyPrice.value = pricingPhase?.formattedPrice
+                            Log.d(TAG, "Monthly price: ${_monthlyPrice.value}")
+                        }
+                        PRODUCT_ID_YEARLY -> {
+                            yearlyProductDetails = details
+                            val offerDetails = details.subscriptionOfferDetails?.firstOrNull()
+                            val pricingPhase = offerDetails?.pricingPhases?.pricingPhaseList?.firstOrNull()
+                            _yearlyPrice.value = pricingPhase?.formattedPrice
+                            Log.d(TAG, "Yearly price: ${_yearlyPrice.value}")
+                        }
+                    }
+                }
+                // Fallbacks
+                if (_monthlyPrice.value == null) _monthlyPrice.value = "$1.49"
+                if (_yearlyPrice.value == null) _yearlyPrice.value = "$12.99"
+            } else {
+                Log.e(TAG, "Failed to query subscription details: ${billingResult.debugMessage}")
+                _monthlyPrice.value = "$1.49"
+                _yearlyPrice.value = "$12.99"
             }
         }
     }
@@ -130,12 +221,23 @@ class BillingManager @Inject constructor(
                 .build()
         ) { billingResult, purchaseList ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                val purchased = purchaseList.any { purchase ->
+                val qrPurchased = purchaseList.any { purchase ->
                     purchase.products.contains(PRODUCT_ID_QR_CODE) &&
                     purchase.purchaseState == Purchase.PurchaseState.PURCHASED
                 }
-                _isQrCodePurchased.value = purchased
-                Log.d(TAG, "QR Code purchased: $purchased")
+                _isQrCodePurchased.value = qrPurchased
+                Log.d(TAG, "QR Code purchased: $qrPurchased")
+
+                // Check for lifetime purchase
+                val lifetimePurchased = purchaseList.any { purchase ->
+                    purchase.products.contains(PRODUCT_ID_LIFETIME) &&
+                    purchase.purchaseState == Purchase.PurchaseState.PURCHASED
+                }
+                if (lifetimePurchased) {
+                    _isSubscribed.value = true
+                    _activePlan.value = PRODUCT_ID_LIFETIME
+                    Log.d(TAG, "Lifetime purchased: true")
+                }
 
                 // Acknowledge any unacknowledged purchases
                 purchaseList.forEach { purchase ->
@@ -143,6 +245,39 @@ class BillingManager @Inject constructor(
                         acknowledgePurchase(purchase)
                     }
                 }
+            }
+        }
+    }
+
+    private fun queryExistingSubscriptions() {
+        billingClient?.queryPurchasesAsync(
+            QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build()
+        ) { billingResult, purchaseList ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                for (purchase in purchaseList) {
+                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                        when {
+                            purchase.products.contains(PRODUCT_ID_MONTHLY) -> {
+                                _isSubscribed.value = true
+                                _activePlan.value = PRODUCT_ID_MONTHLY
+                                Log.d(TAG, "Monthly subscription active")
+                            }
+                            purchase.products.contains(PRODUCT_ID_YEARLY) -> {
+                                _isSubscribed.value = true
+                                _activePlan.value = PRODUCT_ID_YEARLY
+                                Log.d(TAG, "Yearly subscription active")
+                            }
+                        }
+                        if (!purchase.isAcknowledged) {
+                            acknowledgePurchase(purchase)
+                        }
+                    }
+                }
+                Log.d(TAG, "Subscription active: ${_isSubscribed.value}, plan: ${_activePlan.value}")
+            } else {
+                Log.e(TAG, "Failed to query subscriptions: ${billingResult.debugMessage}")
             }
         }
     }
@@ -167,14 +302,62 @@ class BillingManager @Inject constructor(
         billingClient?.launchBillingFlow(activity, billingFlowParams)
     }
 
+    /**
+     * Launch subscription purchase flow for a specific plan.
+     * @param activity The calling activity
+     * @param planType One of PRODUCT_ID_LIFETIME, PRODUCT_ID_MONTHLY, PRODUCT_ID_YEARLY
+     */
+    fun launchSubscriptionPurchase(activity: Activity, planType: String) {
+        val details = when (planType) {
+            PRODUCT_ID_LIFETIME -> lifetimeProductDetails
+            PRODUCT_ID_MONTHLY -> monthlyProductDetails
+            PRODUCT_ID_YEARLY -> yearlyProductDetails
+            else -> null
+        }
+
+        if (details == null) {
+            Log.e(TAG, "Product details not available for plan: $planType")
+            return
+        }
+
+        val productDetailsParamsBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
+            .setProductDetails(details)
+
+        // For subscriptions, we need to set the offer token
+        if (planType in SUBSCRIPTION_PRODUCT_IDS) {
+            val offerToken = details.subscriptionOfferDetails?.firstOrNull()?.offerToken
+            if (offerToken != null) {
+                productDetailsParamsBuilder.setOfferToken(offerToken)
+            } else {
+                Log.e(TAG, "No offer token available for subscription: $planType")
+                return
+            }
+        }
+
+        val billingFlowParams = BillingFlowParams.newBuilder()
+            .setProductDetailsParamsList(listOf(productDetailsParamsBuilder.build()))
+            .build()
+
+        billingClient?.launchBillingFlow(activity, billingFlowParams)
+    }
+
     override fun onPurchasesUpdated(billingResult: BillingResult, purchases: MutableList<Purchase>?) {
         when (billingResult.responseCode) {
             BillingClient.BillingResponseCode.OK -> {
                 purchases?.forEach { purchase ->
                     if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                        // Check QR code purchase
                         if (purchase.products.contains(PRODUCT_ID_QR_CODE)) {
                             _isQrCodePurchased.value = true
                             Log.d(TAG, "QR Code challenge purchased successfully!")
+                        }
+                        // Check subscription/lifetime purchases
+                        for (productId in purchase.products) {
+                            if (productId in ALL_PREMIUM_PRODUCT_IDS) {
+                                _isSubscribed.value = true
+                                _activePlan.value = productId
+                                Log.d(TAG, "Premium plan purchased: $productId")
+                            }
                         }
                         if (!purchase.isAcknowledged) {
                             acknowledgePurchase(purchase)
@@ -205,14 +388,23 @@ class BillingManager @Inject constructor(
         }
     }
 
+    fun restorePurchases() {
+        queryExistingPurchases()
+        queryExistingSubscriptions()
+    }
+
     fun setDebugPremium(enabled: Boolean) {
         if (enabled) {
             _isQrCodePurchased.value = true
+            _isSubscribed.value = true
         } else {
+            _isSubscribed.value = false
+            _activePlan.value = null
             queryExistingPurchases()
+            queryExistingSubscriptions()
         }
     }
-    
+
     fun setSubscribed(subscribed: Boolean) {
         _isSubscribed.value = subscribed
     }

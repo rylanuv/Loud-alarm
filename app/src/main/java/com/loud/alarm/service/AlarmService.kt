@@ -22,9 +22,12 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.loud.alarm.R
 import com.loud.alarm.ui.alarm.AlarmActivity
+import com.loud.alarm.data.VibrationPattern
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
+import kotlin.math.log10
+import kotlin.math.roundToInt
 
 @AndroidEntryPoint
 class AlarmService : Service() {
@@ -40,6 +43,8 @@ class AlarmService : Service() {
         const val CHANNEL_ID = "alarm_ringing_v2"
         const val NOTIFICATION_ID = 1
         private const val TAG = "AlarmService"
+        private const val BOOST_MULTIPLIER = 1.50f
+        private const val MAX_LOUDNESS_ENHANCER_GAIN_MB = 10_000
     }
 
     @Inject
@@ -59,30 +64,38 @@ class AlarmService : Service() {
         acquireWakeLock()
         startForeground(NOTIFICATION_ID, createNotification(alarmId))
 
-        // Read settings and start alarm on a background thread to avoid ANR
+        // Read settings and start alarm on a background thread to avoid ANR.
+        // Each setting read falls back independently so one failure does not
+        // accidentally force unrelated defaults (for example fade-in ON).
         Thread {
-            try {
-                val isVibrationEnabled = kotlinx.coroutines.runBlocking {
-                    settingsRepository.vibrationEnabled.first()
-                }
-                val isFadeInEnabled = kotlinx.coroutines.runBlocking {
-                    settingsRepository.fadeInEnabled.first()
-                }
-                val fadeInDuration = kotlinx.coroutines.runBlocking {
-                    settingsRepository.fadeInDuration.first()
-                }
-                val autoSilenceDuration = kotlinx.coroutines.runBlocking {
-                    settingsRepository.autoSilenceDuration.first()
-                }
+            val isVibrationEnabled = readSettingOrDefault("vibrationEnabled", true) {
+                kotlinx.coroutines.runBlocking { settingsRepository.vibrationEnabled.first() }
+            }
+            val isFadeInEnabled = readSettingOrDefault("fadeInEnabled", true) {
+                kotlinx.coroutines.runBlocking { settingsRepository.fadeInEnabled.first() }
+            }
+            val fadeInDuration = readSettingOrDefault("fadeInDuration", 25) {
+                kotlinx.coroutines.runBlocking { settingsRepository.fadeInDuration.first() }
+            }
+            val autoSilenceDuration = readSettingOrDefault("autoSilenceDuration", 30) {
+                kotlinx.coroutines.runBlocking { settingsRepository.autoSilenceDuration.first() }
+            }
+            val vibrationPatternName = readSettingOrDefault(
+                "vibrationPattern",
+                VibrationPattern.DEVICE_DEFAULT.name
+            ) {
+                kotlinx.coroutines.runBlocking { settingsRepository.vibrationPattern.first() }
+            }
 
-                Handler(Looper.getMainLooper()).post {
-                    startAlarm(isVolumeBoostEnabled, isVibrationEnabled, isFadeInEnabled, fadeInDuration, autoSilenceDuration)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reading settings, starting alarm with defaults", e)
-                Handler(Looper.getMainLooper()).post {
-                    startAlarm(isVolumeBoostEnabled, isVibrationEnabled = false, isFadeInEnabled = true, fadeInDuration = 25, autoSilenceDuration = 30)
-                }
+            Handler(Looper.getMainLooper()).post {
+                startAlarm(
+                    isVolumeBoostEnabled = isVolumeBoostEnabled,
+                    isVibrationEnabled = isVibrationEnabled,
+                    isFadeInEnabled = isFadeInEnabled,
+                    fadeInDuration = fadeInDuration,
+                    autoSilenceDuration = autoSilenceDuration,
+                    vibrationPatternName = vibrationPatternName
+                )
             }
         }.start()
 
@@ -169,12 +182,41 @@ class AlarmService : Service() {
         }
     }
 
-    private fun startAlarm(isVolumeBoostEnabled: Boolean, isVibrationEnabled: Boolean, isFadeInEnabled: Boolean, fadeInDuration: Int, autoSilenceDuration: Int) {
+    private fun <T> readSettingOrDefault(
+        settingName: String,
+        defaultValue: T,
+        reader: () -> T
+    ): T {
+        return try {
+            reader()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read $settingName; using default: $defaultValue", e)
+            defaultValue
+        }
+    }
+
+    private fun startAlarm(isVolumeBoostEnabled: Boolean, isVibrationEnabled: Boolean, isFadeInEnabled: Boolean, fadeInDuration: Int, autoSilenceDuration: Int, vibrationPatternName: String = VibrationPattern.DEVICE_DEFAULT.name) {
+        // Defensive cleanup if service receives another start before being destroyed.
+        fadeAnimator?.cancel()
+        fadeAnimator = null
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
+        mediaPlayer?.let { existingPlayer ->
+            runCatching { existingPlayer.stop() }
+            runCatching { existingPlayer.release() }
+        }
+        mediaPlayer = null
+        vibrator?.cancel()
+
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         // Force max alarm volume — this is the #1 reason alarms are "too quiet"
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
         audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVolume, 0)
+        if (isVolumeBoostEnabled) {
+            val maxMusicVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxMusicVolume, 0)
+        }
 
         try {
             val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
@@ -203,19 +245,11 @@ class AlarmService : Service() {
                     setVolume(1f, 1f)
                 }
                 
-                if (isVolumeBoostEnabled) {
-                    try {
-                        loudnessEnhancer = android.media.audiofx.LoudnessEnhancer(audioSessionId).apply {
-                            setTargetGain(10000) // 10dB boost (creates approx 200% perceived volume)
-                            enabled = true
-                        }
-                        Log.d(TAG, "Volume boost applied successfully")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to apply volume boost", e)
-                    }
-                }
-                
                 start()
+
+                if (isVolumeBoostEnabled) {
+                    applyVolumeBoost(this, BOOST_MULTIPLIER)
+                }
                 
                 if (isFadeInEnabled) {
                     fadeAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
@@ -244,18 +278,65 @@ class AlarmService : Service() {
 
             vibrator?.let {
                 if (it.hasVibrator()) {
-                    val pattern = longArrayOf(0, 500, 1000)
+                    val selectedPattern = VibrationPattern.fromName(vibrationPatternName)
+                    val pattern = selectedPattern.pattern
+                    Log.d(TAG, "Using vibration pattern: ${selectedPattern.displayName}")
+                    
+                    val audioAttributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        it.vibrate(VibrationEffect.createWaveform(pattern, 0))
+                        it.vibrate(VibrationEffect.createWaveform(pattern, 0), audioAttributes)
                     } else {
                         @Suppress("DEPRECATION")
-                        it.vibrate(pattern, 0)
+                        it.vibrate(pattern, 0, audioAttributes)
                     }
                 }
             }
         }
         
         scheduleAutoSilence(autoSilenceDuration)
+    }
+
+    private fun applyVolumeBoost(player: MediaPlayer, multiplier: Float): Boolean {
+        if (multiplier <= 1f) return false
+
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId <= 0) {
+            Log.w(TAG, "Skipping volume boost: invalid audio session id=$audioSessionId")
+            return false
+        }
+
+        val targetGainMb = (20.0 * log10(multiplier.toDouble()) * 100.0)
+            .roundToInt()
+            .coerceIn(0, MAX_LOUDNESS_ENHANCER_GAIN_MB)
+
+        try {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = android.media.audiofx.LoudnessEnhancer(audioSessionId).apply {
+                setTargetGain(targetGainMb)
+                enabled = true
+            }
+            Log.d(TAG, "Volume boost applied: ${multiplier}x ($targetGainMb mB)")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Session boost failed, retrying global mix boost ($targetGainMb mB)", e)
+        }
+
+        return try {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = android.media.audiofx.LoudnessEnhancer(0).apply {
+                setTargetGain(targetGainMb)
+                enabled = true
+            }
+            Log.d(TAG, "Global mix boost applied: ${multiplier}x ($targetGainMb mB)")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to force volume boost ($targetGainMb mB)", e)
+            false
+        }
     }
 
     private fun launchAlarmActivity(alarmId: Int) {

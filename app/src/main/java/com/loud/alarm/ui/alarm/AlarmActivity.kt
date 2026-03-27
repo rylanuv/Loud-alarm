@@ -103,11 +103,13 @@ class AlarmActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val alarmState by viewModel.alarm.collectAsState()
+                    val snoozeEnabled by viewModel.snoozeEnabled.collectAsState()
                     
                     if (alarmState != null) {
                         Log.d(TAG, "Alarm loaded: id=${alarmState!!.id}, challengeTypes=${alarmState!!.challengeTypes}")
                         ActiveAlarmScreen(
                             alarm = alarmState!!,
+                            snoozeEnabled = snoozeEnabled,
                             viewModel = viewModel,
                             onStopSound = {
                                 stopAlarmService()
@@ -251,6 +253,7 @@ class AlarmActivity : ComponentActivity() {
 @Composable
 fun ActiveAlarmScreen(
     alarm: Alarm,
+    snoozeEnabled: Boolean,
     viewModel: AlarmActiveViewModel,
     onStopSound: () -> Unit,
     onDismissActivity: () -> Unit
@@ -287,7 +290,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.MEMORY -> memorySolved
                 ChallengeType.SCAN_SINK -> scanSinkSolved
                 ChallengeType.SCAN_OBJECT -> scanObjectSolved
-                ChallengeType.SHAKE, ChallengeType.TYPING, ChallengeType.PUZZLE -> true // TODO Handle them
+                ChallengeType.SHAKE, ChallengeType.SPELL_BEE, ChallengeType.PUZZLE -> true // TODO Handle them
                 ChallengeType.NONE -> true
             }
         }
@@ -303,7 +306,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.MEMORY -> !memorySolved
                 ChallengeType.SCAN_SINK -> !scanSinkSolved
                 ChallengeType.SCAN_OBJECT -> !scanObjectSolved
-                ChallengeType.SHAKE, ChallengeType.TYPING, ChallengeType.PUZZLE -> false
+                ChallengeType.SHAKE, ChallengeType.SPELL_BEE, ChallengeType.PUZZLE -> false
                 ChallengeType.NONE -> false
             }
         }
@@ -321,15 +324,20 @@ fun ActiveAlarmScreen(
             // Show Dismiss / Snooze Options
             DismissOrSnoozeScreen(
                 alarm = alarm,
+                snoozeEnabled = snoozeEnabled,
                 onDismiss = {
                     Log.d("ActiveAlarmScreen", "User tapped DISMISS")
                     onStopSound()
                     isRingingScreenDismissed = true
                 },
                 onSnooze = { mins ->
-                    Log.d("ActiveAlarmScreen", "User tapped SNOOZE for $mins minutes")
-                    viewModel.snoozeAlarm(alarm, mins)
-                    onDismissActivity() // Snooze dismisses the current ring
+                    if (snoozeEnabled) {
+                        Log.d("ActiveAlarmScreen", "User tapped SNOOZE for $mins minutes")
+                        viewModel.snoozeAlarm(alarm, mins)
+                        onDismissActivity() // Snooze dismisses the current ring
+                    } else {
+                        Log.w("ActiveAlarmScreen", "Snooze tapped while snooze is disabled; ignoring")
+                    }
                 }
             )
         } else if (!isChallengeComplete && currentChallenge != null) {
@@ -466,6 +474,7 @@ private val backgroundImages = listOf(
 @Composable
 fun DismissOrSnoozeScreen(
     alarm: Alarm,
+    snoozeEnabled: Boolean,
     onDismiss: () -> Unit,
     onSnooze: (Int) -> Unit
 ) {
@@ -566,17 +575,19 @@ fun DismissOrSnoozeScreen(
             Text("DISMISS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         
-        Spacer(modifier = Modifier.height(32.dp))
-        Text("Or Snooze for...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            SnoozeButton(min = 5, onSnooze = onSnooze, modifier = Modifier.weight(1f))
-            SnoozeButton(min = 10, onSnooze = onSnooze, modifier = Modifier.weight(1f))
-            SnoozeButton(min = 15, onSnooze = onSnooze, modifier = Modifier.weight(1f))
+        if (snoozeEnabled) {
+            Spacer(modifier = Modifier.height(32.dp))
+            Text("Or Snooze for...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                SnoozeButton(min = 5, onSnooze = onSnooze, modifier = Modifier.weight(1f))
+                SnoozeButton(min = 10, onSnooze = onSnooze, modifier = Modifier.weight(1f))
+                SnoozeButton(min = 15, onSnooze = onSnooze, modifier = Modifier.weight(1f))
+            }
         }
     }
     } // Close Box

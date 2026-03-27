@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -31,11 +32,12 @@ class SettingsRepository @Inject constructor(
         val DARK_MODE_ENABLED = booleanPreferencesKey("dark_mode_enabled")
         val AUTO_SILENCE_DURATION = intPreferencesKey("auto_silence_duration")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val VIBRATION_PATTERN = stringPreferencesKey("vibration_pattern")
     }
 
     val vibrationEnabled: Flow<Boolean> = context.dataStore.data
         .map { preferences: Preferences ->
-            preferences[PreferencesKeys.VIBRATION_ENABLED] ?: false
+            preferences[PreferencesKeys.VIBRATION_ENABLED] ?: true
         }
 
     val snoozeEnabled: Flow<Boolean> = context.dataStore.data
@@ -70,12 +72,17 @@ class SettingsRepository @Inject constructor(
 
     val autoSilenceDuration: Flow<Int> = context.dataStore.data
         .map { preferences: Preferences ->
-            preferences[PreferencesKeys.AUTO_SILENCE_DURATION] ?: 30
+            preferences[PreferencesKeys.AUTO_SILENCE_DURATION] ?: 15
         }
 
     val onboardingCompleted: Flow<Boolean> = context.dataStore.data
         .map { preferences: Preferences ->
             preferences[PreferencesKeys.ONBOARDING_COMPLETED] ?: false
+        }
+
+    val vibrationPattern: Flow<String> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.VIBRATION_PATTERN] ?: VibrationPattern.DEVICE_DEFAULT.name
         }
 
     suspend fun setVibrationEnabled(enabled: Boolean) {
@@ -129,6 +136,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { preferences: MutablePreferences ->
             preferences[PreferencesKeys.ONBOARDING_COMPLETED] = completed
+        }
+    }
+
+    suspend fun setVibrationPattern(patternName: String) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.VIBRATION_PATTERN] = patternName
         }
     }
 }

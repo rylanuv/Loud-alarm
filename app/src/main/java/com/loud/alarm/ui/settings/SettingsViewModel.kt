@@ -3,6 +3,7 @@ package com.loud.alarm.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loud.alarm.data.SettingsRepository
+import com.loud.alarm.data.VibrationPattern
 import com.loud.alarm.billing.BillingManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,9 +44,12 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val autoSilenceDuration: StateFlow<Int> = settingsRepository.autoSilenceDuration
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15)
         
     val isPremiumPurchased: StateFlow<Boolean> = billingManager.isQrCodePurchased
+
+    val vibrationPattern: StateFlow<String> = settingsRepository.vibrationPattern
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), VibrationPattern.DEVICE_DEFAULT.name)
 
     fun setVibrationEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -97,6 +101,12 @@ class SettingsViewModel @Inject constructor(
     
     fun setDebugPremium(enabled: Boolean) {
         billingManager.setDebugPremium(enabled)
+    }
+
+    fun setVibrationPattern(patternName: String) {
+        viewModelScope.launch {
+            settingsRepository.setVibrationPattern(patternName)
+        }
     }
 
     val nextAlarm: StateFlow<Alarm?> = alarmRepository.allAlarms.map { alarmList ->

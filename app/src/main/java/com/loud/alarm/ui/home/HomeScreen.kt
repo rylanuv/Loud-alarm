@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,8 @@ import com.loud.alarm.R
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.ui.components.SkeuomorphicSwitch
+import com.loud.alarm.ui.permissions.RequiredPermissionsStatus
+import com.loud.alarm.ui.permissions.rememberRequiredPermissionsStatus
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,11 +75,13 @@ import java.util.Locale
 fun HomeScreen(
     onNavigateToEditor: (Int?) -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToPermissionSetup: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val alarms by viewModel.alarms.collectAsState()
     val nextAlarm by viewModel.nextAlarm.collectAsState()
     val timeUntilNext by viewModel.timeUntilNextAlarmValues.collectAsState()
+    val permissionsStatus = rememberRequiredPermissionsStatus()
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -116,6 +121,14 @@ fun HomeScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
+            if (!permissionsStatus.allGranted) {
+                PermissionWarningCard(
+                    status = permissionsStatus,
+                    onClick = onNavigateToPermissionSetup
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Next Alarm Card
             AnimatedVisibility(visible = nextAlarm != null) {
                 Column {
@@ -146,6 +159,93 @@ fun HomeScreen(
             }
         }
     }
+    }
+}
+
+@Composable
+private fun PermissionWarningCard(
+    status: RequiredPermissionsStatus,
+    onClick: () -> Unit
+) {
+    val missingLabels = status.missingItems.map { it.title }
+    val summary = when (missingLabels.size) {
+        0 -> ""
+        1 -> "${missingLabels.first()} is still off."
+        2 -> "${missingLabels[0]} and ${missingLabels[1]} are still off."
+        else -> "${missingLabels.dropLast(1).joinToString(", ")}, and ${missingLabels.last()} are still off."
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0x33FFB27A),
+                            Color(0x1AFFB27A)
+                        )
+                    ),
+                    shape = RoundedCornerShape(22.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color(0x66FFB27A),
+                    shape = RoundedCornerShape(22.dp)
+                )
+                .clip(RoundedCornerShape(22.dp))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x33FFB27A)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFFFC289)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Permissions needed",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = summary.ifEmpty {
+                            "Turn on the required permissions so alarms keep working properly."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.82f)
+                    )
+                }
+
+                Text(
+                    text = "Fix",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFFFFC289),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
 
@@ -360,7 +460,7 @@ fun AlarmItemContent(
                                 ChallengeType.MAZE -> "Maze"
                                 ChallengeType.MEMORY -> "Memory"
                                 ChallengeType.SHAKE -> "Shake"
-                                ChallengeType.TYPING -> "Typing"
+                                ChallengeType.SPELL_BEE -> "Spell Bee"
                                 ChallengeType.PUZZLE -> "Puzzle"
                                 else -> type.name
                             }

@@ -1,13 +1,6 @@
 package com.loud.alarm
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
-import android.provider.Settings
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -31,12 +24,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.rememberPermissionState
 import com.loud.alarm.ui.editor.AlarmEditorScreen
 import com.loud.alarm.ui.home.HomeScreen
 import com.loud.alarm.ui.onboarding.OnboardingScreen
 import com.loud.alarm.ui.onboarding.OnboardingViewModel
+import com.loud.alarm.ui.permissions.PermissionSetupScreen
+import com.loud.alarm.ui.settings.AlarmReliabilityScreen
 import com.loud.alarm.ui.settings.SettingsScreen
 import com.loud.alarm.ui.subscription.SubscriptionScreen
 import com.loud.alarm.ui.theme.LoudAlarmTheme
@@ -45,19 +38,8 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    companion object {
-        private const val TAG = "MainActivity"
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Request battery optimization exemption on first launch
-        // This is CRITICAL for alarm reliability on all phones
-        requestBatteryOptimizationExemption()
-
-        // Request exact alarm permission on Android 12+
-        requestExactAlarmPermission()
 
         setContent {
             LoudAlarmTheme {
@@ -83,73 +65,18 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    /**
-     * Requests the user to disable battery optimization for this app.
-     * Without this, manufacturers like Samsung, Xiaomi, Huawei, OnePlus, Oppo, Vivo
-     * will aggressively kill the app in the background, preventing alarms from firing.
-     *
-     * We use REQUEST_IGNORE_BATTERY_OPTIMIZATIONS which shows a system dialog.
-     */
-    private fun requestBatteryOptimizationExemption() {
-        try {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-                Log.d(TAG, "Requesting battery optimization exemption")
-                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = Uri.parse("package:$packageName")
-                }
-                startActivity(intent)
-            } else {
-                Log.d(TAG, "Battery optimization already disabled for this app")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to request battery optimization exemption", e)
-        }
-    }
-
-    /**
-     * On Android 12+ (API 31+), the SCHEDULE_EXACT_ALARM permission requires
-     * explicit user approval. If not granted, redirect to system settings.
-     */
-    private fun requestExactAlarmPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-            if (!alarmManager.canScheduleExactAlarms()) {
-                Log.d(TAG, "Requesting exact alarm permission")
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to open exact alarm settings", e)
-                }
-            }
-        }
-    }
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun AlarmNavigation() {
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val onboardingCompleted by onboardingViewModel.onboardingCompleted.collectAsState(initial = null)
     val navController = rememberNavController()
-    
-    // Request Notification Permission on Android 13+
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val permissionState = rememberPermissionState(
-            permission = android.Manifest.permission.POST_NOTIFICATIONS
-        )
-        LaunchedEffect(Unit) {
-            permissionState.launchPermissionRequest()
-        }
-    }
 
     val bootstrapRoute = "bootstrap"
     val onboardingRoute = "onboarding"
     val homeRoute = "home"
+    val permissionSetupRoute = "permission_setup"
 
     fun navigateBackOrFallback() {
         if (!navController.popBackStack()) {
@@ -208,6 +135,11 @@ fun AlarmNavigation() {
                     navController.navigate("settings") {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToPermissionSetup = {
+                    navController.navigate(permissionSetupRoute) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -225,6 +157,18 @@ fun AlarmNavigation() {
         }
         composable("settings") {
             SettingsScreen(
+                onBack = { navigateBackOrFallback() },
+                onNavigateToSubscription = { navController.navigate("subscription") },
+                onNavigateToAlarmReliability = { navController.navigate("alarm_reliability") }
+            )
+        }
+        composable("alarm_reliability") {
+            AlarmReliabilityScreen(
+                onBack = { navigateBackOrFallback() }
+            )
+        }
+        composable(permissionSetupRoute) {
+            PermissionSetupScreen(
                 onBack = { navigateBackOrFallback() }
             )
         }

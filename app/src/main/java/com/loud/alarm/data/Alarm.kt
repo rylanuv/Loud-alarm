@@ -6,7 +6,7 @@ import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 
 enum class ChallengeType {
-    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, TYPING, PUZZLE, SCAN_SINK, SCAN_OBJECT
+    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT
 }
 
 enum class MathDifficulty {
@@ -60,7 +60,10 @@ class AlarmTypeConverters {
         if (value.isBlank()) return setOf(ChallengeType.NONE)
         return value.split(",")
             .mapNotNull { 
-                try { ChallengeType.valueOf(it.trim()) } 
+                val trimmed = it.trim()
+                // Backward compatibility: map old "TYPING" to new SPELL_BEE
+                val mapped = if (trimmed == "TYPING") "SPELL_BEE" else trimmed
+                try { ChallengeType.valueOf(mapped) } 
                 catch (e: IllegalArgumentException) { null }
             }
             .toSet()

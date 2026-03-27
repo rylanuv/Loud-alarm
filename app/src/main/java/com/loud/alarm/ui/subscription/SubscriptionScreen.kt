@@ -1,41 +1,51 @@
 package com.loud.alarm.ui.subscription
 
+import android.app.Activity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Gamepad
-import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Spellcheck
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loud.alarm.R
+import com.loud.alarm.billing.BillingManager
 import com.loud.alarm.billing.BillingViewModel
 import com.loud.alarm.ui.theme.*
 
@@ -45,8 +55,20 @@ fun SubscriptionScreen(
     onBack: () -> Unit,
     billingViewModel: BillingViewModel = hiltViewModel()
 ) {
-    // For now, using a mock subscription toggle since Play Console subscription setup is required
+    val context = LocalContext.current
+    val activity = context as Activity
     val isSubscribed by billingViewModel.isSubscribed.collectAsState()
+    var selectedPlan by remember { mutableStateOf(1) } // 0 = Lifetime, 1 = Annual, 2 = Monthly
+
+    // Collect real prices from billing
+    val lifetimePrice by billingViewModel.lifetimePrice.collectAsState()
+    val monthlyPrice by billingViewModel.monthlyPrice.collectAsState()
+    val yearlyPrice by billingViewModel.yearlyPrice.collectAsState()
+
+    val activeColor = PrimaryAccent // Replacing cyan with the app's native premium gold
+    val darkBgColor = Color(0xFF132331).copy(alpha = 0.5f)
+    val inactiveBorderColor = Color(0xFF425665).copy(alpha = 0.6f)
+    val grayText = Color(0xFFAAB5BD)
 
     LaunchedEffect(isSubscribed) {
         if (isSubscribed) {
@@ -61,10 +83,11 @@ fun SubscriptionScreen(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
+        // Dark overlay matching app's amoled/dark aesthetics
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Black.copy(alpha = 0.7f))
         )
 
         Scaffold(
@@ -77,9 +100,7 @@ fun SubscriptionScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
-                    )
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                 )
             }
         ) { paddingValues ->
@@ -94,9 +115,9 @@ fun SubscriptionScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    "Unlock PRO",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
+                    text = "Unlock PRO",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
                     textAlign = TextAlign.Center
                 )
@@ -104,7 +125,7 @@ fun SubscriptionScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    "Support the development of the app and unlock all premium wake-up challenges!",
+                    text = "Support the development and get all premium tools to guarantee you never sleep in.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center
@@ -112,118 +133,337 @@ fun SubscriptionScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                Column(
+                // Wake Up Check Hero Feature
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.15f))
-                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(activeColor.copy(alpha = 0.15f))
+                        .border(1.dp, activeColor.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                        .padding(20.dp)
                 ) {
-                    UpgradeFeatureRow(Icons.Default.CheckCircle, "Wake Up Check", IconTeal)
-                    UpgradeFeatureRow(Icons.Default.Edit, "Rewrite Challenge", IconYellow)
-                    UpgradeFeatureRow(Icons.Default.DirectionsWalk, "Steps Challenge", IconOrange)
-                    UpgradeFeatureRow(Icons.Default.Gamepad, "Maze Challenge", IconGreen)
-                    UpgradeFeatureRow(Icons.Default.Psychology, "Memory Challenge", IconPink)
-                    UpgradeFeatureRow(Icons.Default.Vibration, "Shake Challenge", IconCyan)
-                    UpgradeFeatureRow(Icons.Default.Keyboard, "Typing Challenge", Color.LightGray)
-                    UpgradeFeatureRow(Icons.Default.Extension, "Puzzle Challenge", IconIndigo)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(activeColor.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = activeColor, modifier = Modifier.size(32.dp))
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Wake Up Check", color = activeColor, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(4.dp))
+                            Text("We'll proactively verify you are truly awake after the alarm.", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Subscription Options
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Monthly Option
-                    Box(
+                // Challenges Category
+                Text("PREMIUM CHALLENGES", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        UpgradeFeatureRowCompact(Icons.Default.Edit, "Rewrite", IconYellow, Modifier.weight(1f))
+                        UpgradeFeatureRowCompact(Icons.Default.DirectionsWalk, "Steps", IconOrange, Modifier.weight(1f))
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        UpgradeFeatureRowCompact(Icons.Default.Gamepad, "Maze", IconGreen, Modifier.weight(1f))
+                        UpgradeFeatureRowCompact(Icons.Default.Psychology, "Memory", IconPink, Modifier.weight(1f))
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        UpgradeFeatureRowCompact(Icons.Default.Spellcheck, "Spell Bee", IconAmber, Modifier.weight(1f))
+                        UpgradeFeatureRowCompact(Icons.Default.Extension, "Puzzle", IconIndigo, Modifier.weight(1f))
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        UpgradeFeatureRowCompact(Icons.Default.Vibration, "Shake", IconCyan, Modifier.weight(1f))
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Premium Benefits Category
+                Text("PREMIUM BENEFITS", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BenefitCard(
+                        icon = Icons.Default.CheckCircle, 
+                        title = "Guaranteed Wake Up Check", 
+                        color = activeColor, 
+                        subtitle = "A proactive second-layer of defense to verify you are truly awake after the alarm stops."
+                    )
+                    BenefitCard(
+                        icon = Icons.Default.Extension, 
+                        title = "7+ Advanced Challenges", 
+                        color = activeColor, 
+                        subtitle = "Unlock the entire library of challenges like Maze, Memory, Steps, Spell Bee and many more."
+                    )
+                    BenefitCard(
+                        icon = Icons.Default.Vibration, 
+                        title = "Custom Vibrations", 
+                        color = activeColor, 
+                        subtitle = "Access custom, higher-intensity vibration patterns."
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(40.dp))
+
+                // Pricing Cards
+                // Lifetime Plan
+                Box(contentAlignment = Alignment.TopEnd, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                    val isSelected = selectedPlan == 0
+                    val borderColor = if (isSelected) activeColor else inactiveBorderColor
+
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.1f))
-                            .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                            .clickable {
-                                // Mock purchase for now
-                                billingViewModel.setSubscribed(true)
-                            }
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
+                            .background(darkBgColor)
+                            .border(if (isSelected) 2.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
+                            .clickable { selectedPlan = 0 }
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Monthly", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("$1.49", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-                            Text("/month", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
+                        CustomRadioButton(selected = isSelected, color = activeColor)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Lifetime", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                            Text("One-time payment", color = grayText, fontSize = 14.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(lifetimePrice ?: "$20.00", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text("Pay once, use forever", color = activeColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
 
-                    // Yearly Option
+                    // Badge
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
-                            .clickable {
-                                // Mock purchase for now
-                                billingViewModel.setSubscribed(true)
-                            }
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(end = 24.dp)
+                            .background(activeColor, RoundedCornerShape(percent = 50))
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 8.dp, y = (-8).dp)
-                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text("SAVE 27%", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("BEST VALUE", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Annual Plan
+                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                    val isSelected = selectedPlan == 1
+                    val borderColor = if (isSelected) activeColor else inactiveBorderColor
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(darkBgColor)
+                            .border(if (isSelected) 2.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
+                            .clickable { selectedPlan = 1 }
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CustomRadioButton(selected = isSelected, color = activeColor)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Annual", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Best monthly value", color = grayText, fontSize = 14.sp)
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Yearly", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("$12.99", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
-                            Text("/year", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(style = SpanStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)) {
+                                    append(yearlyPrice ?: "$12.99")
+                                }
+                                withStyle(style = SpanStyle(color = grayText, fontSize = 14.sp)) {
+                                    append("/year")
+                                }
+                            }
+                        )
+                    }
+                }
+
+                // Monthly Plan
+                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
+                    val isSelected = selectedPlan == 2
+                    val borderColor = if (isSelected) activeColor else inactiveBorderColor
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(darkBgColor)
+                            .border(if (isSelected) 2.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
+                            .clickable { selectedPlan = 2 }
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CustomRadioButton(selected = isSelected, color = activeColor)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Monthly", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Cancel anytime", color = grayText, fontSize = 14.sp)
                         }
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(style = SpanStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)) {
+                                    append(monthlyPrice ?: "$1.49")
+                                }
+                                withStyle(style = SpanStyle(color = grayText, fontSize = 14.sp)) {
+                                    append("/month")
+                                }
+                            }
+                        )
+                    }
+                }
+
+                // Action Button - Glassmorphism
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .border(1.dp, activeColor.copy(alpha = 0.6f), RoundedCornerShape(percent = 50))
+                        .clickable {
+                            val planType = when (selectedPlan) {
+                                0 -> BillingManager.PRODUCT_ID_LIFETIME
+                                1 -> BillingManager.PRODUCT_ID_YEARLY
+                                else -> BillingManager.PRODUCT_ID_MONTHLY
+                            }
+                            billingViewModel.purchaseSubscription(activity, planType)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = activeColor, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val btnText = when (selectedPlan) {
+                            0 -> "Start Lifetime Plan"
+                            1 -> "Start Annual Plan"
+                            else -> "Start Monthly Plan"
+                        }
+                        Text(
+                            text = btnText,
+                            color = activeColor,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Text(
-                    "Cancel anytime. Subscription automatically renews.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.5f)
+                    text = "Restore Purchase",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 14.sp,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                         billingViewModel.restorePurchases()
+                    }
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "By subscribing, you agree to our Terms of Service and Privacy Policy. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.",
+                    color = Color.Gray.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(48.dp))
             }
         }
     }
 }
 
 @Composable
-private fun UpgradeFeatureRow(icon: ImageVector, text: String, iconColor: Color = Color.White) {
+fun CustomRadioButton(selected: Boolean, color: Color) {
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .border(2.dp, if (selected) color else Color.Gray, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+    }
+}
+
+@Composable
+private fun UpgradeFeatureRowCompact(icon: ImageVector, text: String, iconColor: Color, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Start
+        horizontalArrangement = Arrangement.Start,
+        modifier = modifier
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconColor,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.White,
+            style = MaterialTheme.typography.titleSmall,
+            color = Color.White.copy(alpha = 0.9f),
             fontWeight = FontWeight.Medium
         )
+    }
+}
+@Composable
+private fun BenefitCard(icon: ImageVector, title: String, color: Color, subtitle: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(2.dp))
+                Text(subtitle, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, lineHeight = 16.sp)
+            }
+        }
     }
 }

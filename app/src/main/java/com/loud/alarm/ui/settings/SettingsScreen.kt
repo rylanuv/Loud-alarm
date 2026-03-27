@@ -22,8 +22,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -56,13 +59,17 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.loud.alarm.data.VibrationPattern
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onNavigateToSubscription: () -> Unit,
+    onNavigateToAlarmReliability: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val vibrationEnabled by viewModel.vibrationEnabled.collectAsState()
@@ -75,7 +82,10 @@ fun SettingsScreen(
     var showFadeInWarningDialog by remember { mutableStateOf(false) }
     var devTapCount by remember { mutableStateOf(0) }
     var showDevOptions by remember { mutableStateOf(false) }
-    var showTroubleshootDialog by remember { mutableStateOf(false) }
+    val vibrationPatternName by viewModel.vibrationPattern.collectAsState()
+    val selectedVibrationPattern = VibrationPattern.fromName(vibrationPatternName)
+    var showVibrationPatternDialog by remember { mutableStateOf(false) }
+    val isPremium by viewModel.isPremiumPurchased.collectAsState()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -120,6 +130,16 @@ fun SettingsScreen(
                             subtitle = "Vibrate when alarm rings",
                             checked = vibrationEnabled,
                             onCheckedChange = { viewModel.setVibrationEnabled(it) }
+                        )
+                        
+                        SettingDivider()
+                        
+                        // Custom Vibration Pattern
+                        SettingClickableItem(
+                            icon = selectedVibrationPattern.icon,
+                            title = "Custom Vibration",
+                            subtitle = selectedVibrationPattern.displayName,
+                            onClick = { showVibrationPatternDialog = true }
                         )
                         
                         SettingDivider()
@@ -189,6 +209,121 @@ fun SettingsScreen(
                 }
             }
 
+            item {
+                val premiumSurfaceGradient = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFF2B241B),
+                        Color(0xFF1B160F),
+                        Color(0xFF120F0B)
+                    )
+                )
+                val premiumAccentGradient = Brush.linearGradient(
+                    colors = listOf(Color(0xFFF4C96A), Color(0xFFE3A23D))
+                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onNavigateToSubscription),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(premiumSurfaceGradient)
+                            .border(
+                                width = 1.dp,
+                                color = Color(0xFFE2B660).copy(alpha = 0.45f),
+                                shape = RoundedCornerShape(22.dp)
+                            )
+                            .padding(20.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                Color(0xFFF9D985),
+                                                Color(0xFFC4812A)
+                                            )
+                                        )
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color(0xFFF1C56A).copy(alpha = 0.55f),
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Premium",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isPremium) "Manage Subscription" else "Upgrade to Pro",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color(0xFFF1CC73),
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = if (isPremium) "Update subscription details" else "Unlock all premium features, ad-free experience & exclusive sounds!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    lineHeight = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = if (isPremium) "Tap to manage subscription" else "Tap to view subscription",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color(0xFFF2CB76),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(premiumAccentGradient)
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color.White.copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(999.dp)
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = if (isPremium) "Manage" else "Subscribe",
+                                        color = Color(0xFF2D1A05),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = ">",
+                                        color = Color(0xFF2D1A05),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Troubleshooting Section
             item {
                 SectionHeader(title = "Troubleshooting")
@@ -198,9 +333,8 @@ fun SettingsScreen(
                 SettingsCard {
                     SettingClickableItem(
                         icon = Icons.Default.Warning,
-                        title = "Alarms not ringing?",
-                        subtitle = "Help for Xiaomi, Huawei, Oppo, Vivo users",
-                        onClick = { showTroubleshootDialog = true }
+                        title = "Alarm reliability",
+                        onClick = onNavigateToAlarmReliability
                     )
                 }
             }
@@ -257,6 +391,7 @@ fun SettingsScreen(
                                     nextAlarm?.let { alarm ->
                                         val intent = android.content.Intent(context, com.loud.alarm.service.AlarmReceiver::class.java).apply {
                                             putExtra("ALARM_ID", alarm.id)
+                                            putExtra("IS_VOLUME_BOOST_ENABLED", alarm.isVolumeBoostEnabled)
                                         }
                                         context.sendBroadcast(intent)
                                     }
@@ -386,33 +521,159 @@ fun SettingsScreen(
         )
     }
 
-    // Troubleshoot Dialog
-    if (showTroubleshootDialog) {
+    // Vibration Pattern Selection Dialog
+    if (showVibrationPatternDialog) {
         AlertDialog(
-            onDismissRequest = { showTroubleshootDialog = false },
+            onDismissRequest = { showVibrationPatternDialog = false },
+            containerColor = Color(0xFF1A181C),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
             icon = {
                 Icon(
-                    Icons.Default.Warning,
+                    Icons.Default.Vibration,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.error
+                    tint = MaterialTheme.colorScheme.primary
                 )
             },
-            title = { Text("Device Specific Settings") },
+            title = {
+                Text(
+                    "Custom Vibration",
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
-                Column {
-                    Text("Some phone manufacturers (Xiaomi, Huawei, Oppo, Vivo) aggressively close background apps to save battery.", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("If your alarm isn't ringing on time:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    Text("1. Go to your phone's Settings", style = MaterialTheme.typography.bodyMedium)
-                    Text("2. Find 'Apps' or 'Battery'", style = MaterialTheme.typography.bodyMedium)
-                    Text("3. Find 'Loud Alarm'", style = MaterialTheme.typography.bodyMedium)
-                    Text("4. Enable 'Auto-start' or set battery optimization to 'Unrestricted' / 'No Restrictions'", style = MaterialTheme.typography.bodyMedium)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Choose how your alarm vibrates",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    VibrationPattern.entries.forEach { pattern ->
+                        val isSelected = pattern.name == vibrationPatternName
+                        val isLocked = pattern.isPremium && !isPremium
+                        
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                    else Color.White.copy(alpha = 0.04f)
+                                )
+                                .then(
+                                    if (isSelected) Modifier.border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(14.dp)
+                                    ) else Modifier
+                                )
+                                .clickable {
+                                    if (isLocked) {
+                                        // Cannot select — premium is required
+                                        // The user sees the lock icon; they'd need to subscribe
+                                    } else {
+                                        viewModel.setVibrationPattern(pattern.name)
+                                        showVibrationPatternDialog = false
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = pattern.icon,
+                                contentDescription = pattern.displayName,
+                                tint = if (isLocked) Color.White.copy(alpha = 0.45f) else if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                modifier = Modifier.width(32.dp).padding(end = 8.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = pattern.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isLocked) Color.White.copy(alpha = 0.45f) else Color.White,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            if (isLocked) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                colors = listOf(
+                                                    Color(0xFFFFD700).copy(alpha = 0.25f),
+                                                    Color(0xFFFFA500).copy(alpha = 0.15f)
+                                                )
+                                            )
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.Lock,
+                                        contentDescription = "Premium",
+                                        tint = Color(0xFFFFD700),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            } else if (isSelected) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                    }
+                    
+                    if (!isPremium) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFD700).copy(alpha = 0.12f),
+                                            Color(0xFFFFA500).copy(alpha = 0.08f)
+                                        )
+                                    )
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = Color(0xFFFFD700).copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = Color(0xFFFFD700),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Upgrade to Premium to unlock all vibration patterns",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFFFD700).copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showTroubleshootDialog = false }) {
-                    Text("Got It")
+                TextButton(onClick = { showVibrationPatternDialog = false }) {
+                    Text("Done")
                 }
             }
         )
@@ -558,7 +819,7 @@ fun SettingSliderItem(
 fun SettingClickableItem(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -579,11 +840,13 @@ fun SettingClickableItem(
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f)
-            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+            }
         }
         Text(
             text = "›",
@@ -641,3 +904,4 @@ private fun SettingLeadingIcon(icon: ImageVector) {
         )
     }
 }
+

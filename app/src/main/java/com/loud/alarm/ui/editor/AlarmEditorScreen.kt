@@ -9,18 +9,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.*
+import androidx.compose.animation.*
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,7 +45,7 @@ import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Wash
 import androidx.compose.material.icons.filled.CameraAlt
@@ -86,6 +76,8 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -115,7 +107,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -152,7 +146,6 @@ fun AlarmEditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val isQrCodePurchased by billingViewModel.isQrCodePurchased.collectAsState()
     val isSubscribed by billingViewModel.isSubscribed.collectAsState()
     
     Box(modifier = Modifier.fillMaxSize()) {
@@ -306,7 +299,7 @@ fun AlarmEditorScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                if (uiState.isVolumeBoostEnabled) "200% volume — extra loud"
+                                if (uiState.isVolumeBoostEnabled) "150% volume - extra loud"
                                 else "Normal volume",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (uiState.isVolumeBoostEnabled)
@@ -350,7 +343,7 @@ fun AlarmEditorScreen(
                         ChallengeType.MAZE to Triple(Icons.Default.Gamepad, "Maze", IconGreen),
                         ChallengeType.MEMORY to Triple(Icons.Default.Psychology, "Memory", IconPink),
                         ChallengeType.SHAKE to Triple(Icons.Default.Vibration, "Shake", IconCyan),
-                        ChallengeType.TYPING to Triple(Icons.Default.Keyboard, "Typing", Color.LightGray),
+                        ChallengeType.SPELL_BEE to Triple(Icons.Default.Spellcheck, "Spell Bee", IconAmber),
                         ChallengeType.PUZZLE to Triple(Icons.Default.Extension, "Puzzle", IconIndigo),
                         ChallengeType.SCAN_SINK to Triple(Icons.Default.Wash, "Scan Sink", IconTeal),
                         ChallengeType.SCAN_OBJECT to Triple(Icons.Default.CameraAlt, "Scan Object", IconLime)
@@ -365,16 +358,15 @@ fun AlarmEditorScreen(
                                 if (i + j < challengeOptions.size) {
                                     val (type, extraArgs) = challengeOptions[i + j]
                                     val (icon, title, iconColor) = extraArgs
-                                    val requiresPurchase = type == ChallengeType.QR_CODE && !isQrCodePurchased
                                     val requiresSubscription = type in listOf(
-                                        ChallengeType.REWRITE, ChallengeType.STEP,
+                                        ChallengeType.STEP,
                                         ChallengeType.MAZE, ChallengeType.MEMORY,
-                                        ChallengeType.SHAKE, ChallengeType.TYPING,
+                                        ChallengeType.SHAKE, ChallengeType.SPELL_BEE,
                                         ChallengeType.PUZZLE, ChallengeType.SCAN_SINK,
                                         ChallengeType.SCAN_OBJECT
                                     ) && !isSubscribed
                                     
-                                    val isLocked = requiresPurchase || requiresSubscription
+                                    val isLocked = requiresSubscription
 
                                     val selected = uiState.challengeTypes.contains(type)
 
@@ -402,11 +394,29 @@ fun AlarmEditorScreen(
                                             Box {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(44.dp)
+                                                        .size(48.dp)
+                                                        .shadow(
+                                                            elevation = 8.dp,
+                                                            shape = CircleShape,
+                                                            ambientColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else iconColor.copy(alpha = 0.6f),
+                                                            spotColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else iconColor.copy(alpha = 0.6f)
+                                                        )
                                                         .clip(CircleShape)
                                                         .background(
-                                                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                                            else iconColor.copy(alpha = 0.2f)
+                                                            Brush.radialGradient(
+                                                                colors = if (selected) listOf(
+                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                                                ) else listOf(
+                                                                    iconColor.copy(alpha = 0.35f),
+                                                                    iconColor.copy(alpha = 0.08f)
+                                                                )
+                                                            )
+                                                        )
+                                                        .border(
+                                                            width = 1.5.dp,
+                                                            color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else iconColor.copy(alpha = 0.4f),
+                                                            shape = CircleShape
                                                         ),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -434,7 +444,7 @@ fun AlarmEditorScreen(
                                                 text = title,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White
+                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f)
                                             )
                                         }
                                     }
@@ -454,7 +464,10 @@ fun AlarmEditorScreen(
                         Text("Difficulty", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.animateContentSize()
+                        ) {
                             MathDifficulty.values().forEach { diff ->
                                 val selected = diff == uiState.mathDifficulty
                                 val (description, example) = when (diff) {
@@ -463,47 +476,105 @@ fun AlarmEditorScreen(
                                     MathDifficulty.HARD -> "Solve for x — equations" to "e.g.  3x + 7 = 22,  x = ?"
                                     MathDifficulty.EXTREME -> "Paper-worthy problems" to "e.g.  347 × 28 = ?  or  7x + 32 × 5 = 811"
                                 }
+                                
+                                val scale by animateFloatAsState(
+                                    targetValue = if (selected) 1.02f else 1.0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    ),
+                                    label = "scale"
+                                )
+                                val bgColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+                                    label = "bgColor"
+                                )
+                                val borderColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                    label = "borderColor"
+                                )
+                                val dotSize by animateDpAsState(
+                                    targetValue = if (selected) 12.dp else 8.dp,
+                                    label = "dotSize"
+                                )
+
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
                                         .clickable { viewModel.updateMathDifficulty(diff) }
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                            else Color.White.copy(alpha = 0.1f)
-                                        )
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(bgColor)
                                         .border(
-                                            width = 1.dp,
-                                            color = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
-                                            shape = RoundedCornerShape(10.dp)
+                                            width = if (selected) 2.dp else 1.dp,
+                                            color = borderColor,
+                                            shape = RoundedCornerShape(14.dp)
                                         )
-                                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                                        .padding(1.dp) // Add extra padding to prevent border clipping
                                 ) {
-                                    Column {
-                                        Text(
-                                            diff.name,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (selected) MaterialTheme.colorScheme.primary
-                                                   else Color.White
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .size(dotSize)
+                                                .clip(CircleShape)
+                                                .background(if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f))
                                         )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            description,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                                                   else Color.White.copy(alpha = 0.7f)
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            example,
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                fontWeight = FontWeight.Medium,
-                                                letterSpacing = 0.5.sp
-                                            ),
-                                            color = if (selected) MaterialTheme.colorScheme.primary
-                                                   else Color.White.copy(alpha = 0.5f)
-                                        )
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                diff.name,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+                                                letterSpacing = 1.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.7f)
+                                            )
+                                            
+                                            AnimatedVisibility(
+                                                visible = selected,
+                                                enter = expandVertically(
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                                        stiffness = Spring.StiffnessLow
+                                                    )
+                                                ) + fadeIn(),
+                                                exit = shrinkVertically() + fadeOut()
+                                            ) {
+                                                Column(modifier = Modifier.fillMaxWidth()) {
+                                                    Spacer(modifier = Modifier.height(10.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .background(Color.Black.copy(alpha = 0.3f))
+                                                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                                            .padding(12.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            example,
+                                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                                letterSpacing = 0.5.sp
+                                                            ),
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            textAlign = TextAlign.Center
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -884,11 +955,29 @@ fun AlarmEditorScreen(
                                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(36.dp)
+                                                        .size(40.dp)
+                                                        .shadow(
+                                                            elevation = 6.dp,
+                                                            shape = CircleShape,
+                                                            ambientColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else iconColor.copy(alpha = 0.5f),
+                                                            spotColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else iconColor.copy(alpha = 0.5f)
+                                                        )
                                                         .clip(CircleShape)
                                                         .background(
-                                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                                            else iconColor.copy(alpha = 0.2f)
+                                                            Brush.radialGradient(
+                                                                colors = if (isSelected) listOf(
+                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                                                ) else listOf(
+                                                                    iconColor.copy(alpha = 0.35f),
+                                                                    iconColor.copy(alpha = 0.08f)
+                                                                )
+                                                            )
+                                                        )
+                                                        .border(
+                                                            width = 1.dp,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else iconColor.copy(alpha = 0.35f),
+                                                            shape = CircleShape
                                                         ),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -899,11 +988,11 @@ fun AlarmEditorScreen(
                                                         modifier = Modifier.size(20.dp)
                                                     )
                                                 }
-                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
                                                     label,
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                                     textAlign = TextAlign.Center
                                                 )
@@ -1135,8 +1224,6 @@ fun WheelTimePicker(
     val visibleCount = 5
     
     // ──────────────────────────────────────────────────
-    val bandColor = Color(0xFF2C2C2E)
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1162,7 +1249,21 @@ fun WheelTimePicker(
             modifier = Modifier
                 .width(220.dp)
                 .height(itemHeight)
-                .background(color = bandColor, shape = RoundedCornerShape(14.dp))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.15f),
+                            Color.White.copy(alpha = 0.05f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .clip(RoundedCornerShape(14.dp))
         )
 
         Row(
@@ -1333,13 +1434,19 @@ fun RepeatPickerDialog(
     onDaysChanged: (Set<Int>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // ──────────────────────────────────────────────────
     val allDays = setOf(1, 2, 3, 4, 5, 6, 7)
-    val weekdays = setOf(2, 3, 4, 5, 6)       // ──────────────────────────────────────────────────
-    val weekends = setOf(1, 7)                 // ──────────────────────────────────────────────────
+    val weekdays = setOf(2, 3, 4, 5, 6)
+    val weekends = setOf(1, 7)
+    val presets = listOf(emptySet(), allDays, weekdays, weekends)
 
-    // ──────────────────────────────────────────────────
     var localDays by remember { mutableStateOf(selectedDays) }
+
+    // Custom is expanded when current selection doesn't match any preset
+    val isCustom = localDays !in presets
+    var customExpanded by remember { mutableStateOf(isCustom) }
+
+    // When a preset is selected, collapse custom
+    // When custom is toggled to match a preset, keep custom open (user is actively editing)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1363,104 +1470,145 @@ fun RepeatPickerDialog(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // ──────────────────────────────────────────────────
-                // ──────────────────────────────────────────────────
+                // Preset options
                 RepeatOptionRow(
                     label = "Once",
                     subtitle = "Ring only one time",
-                    isSelected = localDays.isEmpty(),
-                    onClick = { localDays = emptySet() }
+                    isSelected = localDays.isEmpty() && !customExpanded,
+                    onClick = {
+                        localDays = emptySet()
+                        customExpanded = false
+                    }
                 )
 
-                // ──────────────────────────────────────────────────
                 RepeatOptionRow(
                     label = "Every Day",
                     subtitle = "Mon – Sun",
-                    isSelected = localDays == allDays,
-                    onClick = { localDays = allDays }
+                    isSelected = localDays == allDays && !customExpanded,
+                    onClick = {
+                        localDays = allDays
+                        customExpanded = false
+                    }
                 )
 
-                // ──────────────────────────────────────────────────
                 RepeatOptionRow(
                     label = "Weekdays",
                     subtitle = "Mon – Fri",
-                    isSelected = localDays == weekdays,
-                    onClick = { localDays = weekdays }
+                    isSelected = localDays == weekdays && !customExpanded,
+                    onClick = {
+                        localDays = weekdays
+                        customExpanded = false
+                    }
                 )
 
-                // ──────────────────────────────────────────────────
                 RepeatOptionRow(
                     label = "Weekends",
                     subtitle = "Sat & Sun",
-                    isSelected = localDays == weekends,
-                    onClick = { localDays = weekends }
+                    isSelected = localDays == weekends && !customExpanded,
+                    onClick = {
+                        localDays = weekends
+                        customExpanded = false
+                    }
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // ──────────────────────────────────────────────────
-                Box(
+                // Custom option as a radio row (like the presets)
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // ──────────────────────────────────────────────────
-                Text(
-                    "Custom",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-
-                val dayNames = listOf(
-                    1 to "Sunday",
-                    2 to "Monday",
-                    3 to "Tuesday",
-                    4 to "Wednesday",
-                    5 to "Thursday",
-                    6 to "Friday",
-                    7 to "Saturday"
-                )
-                dayNames.forEach { (dayId, name) ->
-                    val isOn = localDays.contains(dayId)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                localDays = if (isOn) localDays - dayId else localDays + dayId
-                            }
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                        .clickable {
+                            customExpanded = true
+                            // If currently a preset with no days, seed with empty for user to pick
+                        }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.RadioButton(
+                        selected = customExpanded,
+                        onClick = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            name,
+                            "Custom",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = if (isOn) MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Medium,
+                            color = if (customExpanded) MaterialTheme.colorScheme.onSurface
                                    else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Switch(
-                            checked = isOn,
-                            onCheckedChange = {
-                                localDays = if (it) localDays + dayId else localDays - dayId
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
+                        Text(
+                            "Pick specific days",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
+                    }
+                    // Chevron indicator
+                    Icon(
+                        imageVector = if (customExpanded) Icons.Default.KeyboardArrowUp
+                                     else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (customExpanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Expandable custom day toggles
+                AnimatedVisibility(
+                    visible = customExpanded,
+                    enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)),
+                    exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(start = 34.dp, top = 4.dp) // Indent under the radio button
+                    ) {
+                        val dayNames = listOf(
+                            2 to "Monday",
+                            3 to "Tuesday",
+                            4 to "Wednesday",
+                            5 to "Thursday",
+                            6 to "Friday",
+                            7 to "Saturday",
+                            1 to "Sunday"
+                        )
+                        dayNames.forEach { (dayId, name) ->
+                            val isOn = localDays.contains(dayId)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        localDays = if (isOn) localDays - dayId else localDays + dayId
+                                    }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (isOn) MaterialTheme.colorScheme.onSurface
+                                           else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Switch(
+                                    checked = isOn,
+                                    onCheckedChange = {
+                                        localDays = if (it) localDays + dayId else localDays - dayId
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // ──────────────────────────────────────────────────
+                // Action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -1671,12 +1819,38 @@ fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.Smartphone,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = CircleShape,
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                        )
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Smartphone,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "Wake Up Check",
@@ -1735,16 +1909,43 @@ fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = stepColor,
-                                modifier = Modifier.size(40.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .shadow(
+                                        elevation = 10.dp,
+                                        shape = CircleShape,
+                                        ambientColor = stepColor.copy(alpha = 0.6f),
+                                        spotColor = stepColor.copy(alpha = 0.6f)
+                                    )
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                stepColor.copy(alpha = 0.4f),
+                                                stepColor.copy(alpha = 0.08f)
+                                            )
+                                        )
+                                    )
+                                    .border(
+                                        width = 1.5.dp,
+                                        color = stepColor.copy(alpha = 0.5f),
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = stepColor,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text, 
-                                style = MaterialTheme.typography.bodyMedium, 
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

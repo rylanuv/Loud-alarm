@@ -46,7 +46,7 @@ class OnboardingViewModel @Inject constructor(
 
     fun selectFreeChallenge(type: ChallengeType) {
         val nextSelection = when (type) {
-            ChallengeType.MATH -> setOf(ChallengeType.MATH)
+            ChallengeType.MATH, ChallengeType.QR_CODE, ChallengeType.REWRITE, ChallengeType.NONE -> setOf(type)
             else -> setOf(ChallengeType.NONE)
         }
         _uiState.value = _uiState.value.copy(challengeTypes = nextSelection)

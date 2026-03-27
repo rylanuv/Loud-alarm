@@ -29,8 +29,8 @@ class HomeViewModel @Inject constructor(
     val alarms: StateFlow<List<Alarm>> = repository.allAlarms
         .map { alarmList ->
             alarmList.sortedWith(
-                compareByDescending<Alarm> { it.enabled }
-                    .thenBy { calculateTimeUntilNext(it) }
+                compareBy<Alarm> { it.hour }
+                    .thenBy { it.minute }
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

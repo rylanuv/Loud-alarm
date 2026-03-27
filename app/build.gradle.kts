@@ -13,7 +13,7 @@ android {
         applicationId = "com.loud.alarm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
+        versionCode = 5
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -36,11 +36,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -67,7 +67,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.material:material-icons-extended") // R8 tree-shakes unused icons
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
@@ -91,11 +91,11 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
     
-    // ML Kit Barcode Scanning
-    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // ML Kit Barcode Scanning (thin/Play Services variant — model downloaded on-device, not bundled)
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
 
-    // ML Kit Image Labeling (for Scan Sink / Scan Object challenges)
-    implementation("com.google.mlkit:image-labeling:17.0.9")
+    // ML Kit Image Labeling (thin/Play Services variant — saves ~30-35 MB vs bundled)
+    implementation("com.google.android.gms:play-services-mlkit-image-labeling:16.0.8")
 
     // Accompanist (Permissions)
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
