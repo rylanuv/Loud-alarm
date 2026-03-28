@@ -1,7 +1,17 @@
 package com.loud.alarm.ui.editor
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.media.RingtoneManager
 import android.net.Uri
 import android.widget.Toast
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -36,12 +46,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Vibration
@@ -62,7 +72,7 @@ import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.LocalDining
 import androidx.compose.material.icons.filled.SportsMma
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Yard
 import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Fastfood
@@ -95,6 +105,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -116,15 +127,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -135,8 +150,29 @@ import com.loud.alarm.ui.challenge.CameraPreview
 import com.loud.alarm.ui.challenge.ScannerOverlay
 import com.loud.alarm.ui.theme.*
 import kotlinx.coroutines.flow.distinctUntilChanged
+import java.io.File
+import java.util.concurrent.Executors
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val FREE_CHALLENGE_LIMIT = 2
+
+private fun resolveRingtoneTitle(context: Context, soundUri: String?): String {
+    val ringtoneUri = soundUri
+        ?.takeIf { it.isNotBlank() }
+        ?.let(Uri::parse)
+        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+
+    if (ringtoneUri == null) return "Default alarm sound"
+
+    return runCatching {
+        RingtoneManager.getRingtone(context, ringtoneUri)?.getTitle(context)
+    }.getOrNull()
+        ?.takeIf { it.isNotBlank() }
+        ?: "Default alarm sound"
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun AlarmEditorScreen(
     onBack: () -> Unit,
@@ -147,6 +183,27 @@ fun AlarmEditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val isSubscribed by billingViewModel.isSubscribed.collectAsState()
+    
+    val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
+    
+    val ringtonePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val data = result.data ?: return@rememberLauncherForActivityResult
+        if (!data.hasExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)) {
+            return@rememberLauncherForActivityResult
+        }
+        val pickedUri = IntentCompat.getParcelableExtra(
+            data,
+            RingtoneManager.EXTRA_RINGTONE_PICKED_URI,
+            Uri::class.java
+        )
+        viewModel.updateSoundUri(pickedUri?.toString())
+    }
+    val ringtoneTitle = remember(context, uiState.soundUri) {
+        resolveRingtoneTitle(context, uiState.soundUri)
+    }
     
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.foundation.Image(
@@ -173,7 +230,30 @@ fun AlarmEditorScreen(
                         }
                     },
                     actions = {
-                        TextButton(onClick = { viewModel.saveAlarm(onBack) }) {
+                        TextButton(onClick = {
+                            val requiresSinkPhoto =
+                                uiState.challengeTypes.contains(ChallengeType.SCAN_SINK) &&
+                                    uiState.sinkImageUri.isNullOrBlank()
+                            if (requiresSinkPhoto) {
+                                Toast.makeText(
+                                    context,
+                                    "Add a sink photo to save this alarm.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@TextButton
+                            }
+                            val activeChallengeCount = uiState.challengeTypes.count { it != ChallengeType.NONE }
+                            if (!isSubscribed && activeChallengeCount > FREE_CHALLENGE_LIMIT) {
+                                Toast.makeText(
+                                    context,
+                                    "Free users can use up to $FREE_CHALLENGE_LIMIT challenges per alarm.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                onNavigateToSubscription()
+                            } else {
+                                viewModel.saveAlarm(onBack)
+                            }
+                        }) {
                             Text(
                                 "Save",
                                  fontWeight = FontWeight.Bold,
@@ -268,6 +348,67 @@ fun AlarmEditorScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            GlassyCard(
+                onClick = {
+                    val existingUri = uiState.soundUri
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let(Uri::parse)
+                    val defaultAlarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    val pickerIntent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, defaultAlarmUri)
+                        putExtra(
+                            RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                            existingUri ?: defaultAlarmUri
+                        )
+                    }
+                    ringtonePickerLauncher.launch(pickerIntent)
+                }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = "Ringtone",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Ringtone",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                ringtoneTitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -285,7 +426,7 @@ fun AlarmEditorScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(
-                            Icons.Default.VolumeUp,
+                            Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = "Volume",
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
@@ -339,7 +480,7 @@ fun AlarmEditorScreen(
                         ChallengeType.MATH to Triple(Icons.Default.Calculate, "Maths", IconRed),
                         ChallengeType.QR_CODE to Triple(Icons.Default.QrCodeScanner, "QR Code", IconPurple),
                         ChallengeType.REWRITE to Triple(Icons.Default.Edit, "Rewrite", IconYellow),
-                        ChallengeType.STEP to Triple(Icons.Default.DirectionsWalk, "Steps", IconOrange),
+                        ChallengeType.STEP to Triple(Icons.AutoMirrored.Filled.DirectionsWalk, "Steps", IconOrange),
                         ChallengeType.MAZE to Triple(Icons.Default.Gamepad, "Maze", IconGreen),
                         ChallengeType.MEMORY to Triple(Icons.Default.Psychology, "Memory", IconPink),
                         ChallengeType.SHAKE to Triple(Icons.Default.Vibration, "Shake", IconCyan),
@@ -347,6 +488,16 @@ fun AlarmEditorScreen(
                         ChallengeType.PUZZLE to Triple(Icons.Default.Extension, "Puzzle", IconIndigo),
                         ChallengeType.SCAN_SINK to Triple(Icons.Default.Wash, "Scan Sink", IconTeal),
                         ChallengeType.SCAN_OBJECT to Triple(Icons.Default.CameraAlt, "Scan Object", IconLime)
+                    )
+                    val premiumChallengeTypes = setOf(
+                        ChallengeType.STEP,
+                        ChallengeType.MAZE,
+                        ChallengeType.MEMORY,
+                        ChallengeType.SHAKE,
+                        ChallengeType.SPELL_BEE,
+                        ChallengeType.PUZZLE,
+                        ChallengeType.SCAN_SINK,
+                        ChallengeType.SCAN_OBJECT
                     )
                     val columns = 2
                     for (i in challengeOptions.indices step columns) {
@@ -358,17 +509,10 @@ fun AlarmEditorScreen(
                                 if (i + j < challengeOptions.size) {
                                     val (type, extraArgs) = challengeOptions[i + j]
                                     val (icon, title, iconColor) = extraArgs
-                                    val requiresSubscription = type in listOf(
-                                        ChallengeType.STEP,
-                                        ChallengeType.MAZE, ChallengeType.MEMORY,
-                                        ChallengeType.SHAKE, ChallengeType.SPELL_BEE,
-                                        ChallengeType.PUZZLE, ChallengeType.SCAN_SINK,
-                                        ChallengeType.SCAN_OBJECT
-                                    ) && !isSubscribed
-                                    
-                                    val isLocked = requiresSubscription
-
                                     val selected = uiState.challengeTypes.contains(type)
+                                    val requiresSubscription = type in premiumChallengeTypes
+                                    val isLocked = requiresSubscription && !isSubscribed && !selected
+                                    val maxActiveChallenges = if (isSubscribed) Int.MAX_VALUE else FREE_CHALLENGE_LIMIT
 
                                     Box(
                                         modifier = Modifier
@@ -384,8 +528,31 @@ fun AlarmEditorScreen(
                                                 shape = RoundedCornerShape(12.dp)
                                             )
                                             .clickable {
-                                                if (isLocked) onNavigateToSubscription()
-                                                else viewModel.toggleChallengeType(type)
+                                                if (isLocked) {
+                                                    onNavigateToSubscription()
+                                                } else {
+                                                    val cameraChallenges = setOf(
+                                                        ChallengeType.QR_CODE,
+                                                        ChallengeType.SCAN_SINK,
+                                                        ChallengeType.SCAN_OBJECT
+                                                    )
+                                                    
+                                                    if (type in cameraChallenges && !cameraPermissionState.status.isGranted) {
+                                                        cameraPermissionState.launchPermissionRequest()
+                                                    }
+
+                                                    val didUpdate = viewModel.toggleChallengeType(
+                                                        type = type,
+                                                        maxActiveChallenges = maxActiveChallenges
+                                                    )
+                                                    if (!didUpdate && !isSubscribed) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Free users can select up to $FREE_CHALLENGE_LIMIT challenges.",
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    }
+                                                }
                                             }
                                             .padding(vertical = 14.dp, horizontal = 8.dp),
                                         contentAlignment = Alignment.Center
@@ -471,8 +638,8 @@ fun AlarmEditorScreen(
                             MathDifficulty.values().forEach { diff ->
                                 val selected = diff == uiState.mathDifficulty
                                 val (description, example) = when (diff) {
-                                    MathDifficulty.EASY -> "Addition & Subtraction" to "e.g.  45 + 32 = ?"
-                                    MathDifficulty.MEDIUM -> "Multi-step expressions" to "e.g.  (23 + 41) × 4 = ?"
+                                    MathDifficulty.EASY -> "Addition & Subtraction" to "e.g.  18 + 9 = ?"
+                                    MathDifficulty.MEDIUM -> "Multi-step expressions" to "e.g.  (14 + 8) × 3 = ?"
                                     MathDifficulty.HARD -> "Solve for x — equations" to "e.g.  3x + 7 = 22,  x = ?"
                                     MathDifficulty.EXTREME -> "Paper-worthy problems" to "e.g.  347 × 28 = ?  or  7x + 32 × 5 = 811"
                                 }
@@ -500,6 +667,7 @@ fun AlarmEditorScreen(
 
                                 Box(
                                     modifier = Modifier
+                                        .padding(horizontal = 2.dp)
                                         .fillMaxWidth()
                                         .graphicsLayer {
                                             scaleX = scale
@@ -514,7 +682,6 @@ fun AlarmEditorScreen(
                                             shape = RoundedCornerShape(14.dp)
                                         )
                                         .padding(horizontal = 16.dp, vertical = 14.dp)
-                                        .padding(1.dp) // Add extra padding to prevent border clipping
                                 ) {
                                     Row(verticalAlignment = Alignment.Top) {
                                         Box(
@@ -582,6 +749,92 @@ fun AlarmEditorScreen(
                     }
                     
                     // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.MAZE)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Maze Difficulty", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.animateContentSize()
+                        ) {
+                            MathDifficulty.values().forEach { diff ->
+                                val selected = diff == uiState.mazeDifficulty
+                                val description = when (diff) {
+                                    MathDifficulty.EASY -> "Short paths and open routes"
+                                    MathDifficulty.MEDIUM -> "Longer route with more blockers"
+                                    MathDifficulty.HARD -> "Dense walls and dead ends"
+                                    MathDifficulty.EXTREME -> "Maximum maze complexity"
+                                }
+
+                                val scale by animateFloatAsState(
+                                    targetValue = if (selected) 1.02f else 1.0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    ),
+                                    label = "scale"
+                                )
+                                val bgColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+                                    label = "bgColor"
+                                )
+                                val borderColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                    label = "borderColor"
+                                )
+                                val dotSize by animateDpAsState(
+                                    targetValue = if (selected) 12.dp else 8.dp,
+                                    label = "dotSize"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .fillMaxWidth()
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
+                                        .clickable { viewModel.updateMazeDifficulty(diff) }
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(bgColor)
+                                        .border(
+                                            width = if (selected) 2.dp else 1.dp,
+                                            color = borderColor,
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .size(dotSize)
+                                                .clip(CircleShape)
+                                                .background(if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f))
+                                        )
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                diff.name,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+                                                letterSpacing = 1.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (uiState.challengeTypes.contains(ChallengeType.QR_CODE)) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("QR Code Mode", style = MaterialTheme.typography.titleSmall, color = Color.White)
@@ -755,31 +1008,52 @@ fun AlarmEditorScreen(
                     }
 
                     // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.SHAKE)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Shake Count", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val shakeOptions = listOf(15, 30, 50, 100)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            shakeOptions.forEach { count ->
+                                val isSelected = uiState.shakeCount == count
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.updateShakeCount(count) }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$count shakes",
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (uiState.challengeTypes.contains(ChallengeType.SCAN_SINK)) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("Scan Sink Setup", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(8.dp))
-
-                        val sinkImagePicker = rememberLauncherForActivityResult(
-                            contract = ActivityResultContracts.GetContent()
-                        ) { uri: Uri? ->
-                            if (uri != null) {
-                                // Copy image to app's internal storage for persistence
-                                try {
-                                    val inputStream = context.contentResolver.openInputStream(uri)
-                                    val file = java.io.File(context.filesDir, "sink_reference_${System.currentTimeMillis()}.jpg")
-                                    inputStream?.use { input ->
-                                        file.outputStream().use { output ->
-                                            input.copyTo(output)
-                                        }
-                                    }
-                                    viewModel.updateSinkImageUri(file.absolutePath)
-                                    Toast.makeText(context, "Sink image saved!", Toast.LENGTH_SHORT).show()
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
+                        var showSinkCameraDialog by remember { mutableStateOf(false) }
 
                         Column {
                             Text(
@@ -838,11 +1112,11 @@ fun AlarmEditorScreen(
                                             .weight(1f)
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(Color.White.copy(alpha = 0.1f))
-                                            .clickable { sinkImagePicker.launch("image/*") }
+                                            .clickable { showSinkCameraDialog = true }
                                             .padding(vertical = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("Change Image", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                        Text("Retake Photo", color = Color.White, style = MaterialTheme.typography.labelMedium)
                                     }
                                     Box(
                                         modifier = Modifier
@@ -867,7 +1141,7 @@ fun AlarmEditorScreen(
                                             color = Color.White.copy(alpha = 0.2f),
                                             shape = RoundedCornerShape(10.dp)
                                         )
-                                        .clickable { sinkImagePicker.launch("image/*") }
+                                        .clickable { showSinkCameraDialog = true }
                                         .padding(vertical = 24.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -880,7 +1154,7 @@ fun AlarmEditorScreen(
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            "Tap to upload a photo of your sink",
+                                            "Tap to add photo of your sink",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = Color.White.copy(alpha = 0.8f)
                                         )
@@ -892,6 +1166,17 @@ fun AlarmEditorScreen(
                                     }
                                 }
                             }
+                        }
+
+                        if (showSinkCameraDialog) {
+                            SinkPhotoCaptureOverlay(
+                                onPhotoCaptured = { photoPath ->
+                                    viewModel.updateSinkImageUri(photoPath)
+                                    showSinkCameraDialog = false
+                                    Toast.makeText(context, "Sink photo saved!", Toast.LENGTH_SHORT).show()
+                                },
+                                onDismiss = { showSinkCameraDialog = false }
+                            )
                         }
                     }
 
@@ -913,7 +1198,7 @@ fun AlarmEditorScreen(
                             Triple(Icons.Default.Coffee, "Coffee cup", IconOrange),
                             Triple(Icons.Default.LocalDining, "Bowl", IconRed),
                             Triple(Icons.Default.SportsMma, "Shoe", IconGreen),
-                            Triple(Icons.Default.MenuBook, "Book", IconPurple),
+                            Triple(Icons.AutoMirrored.Filled.MenuBook, "Book", IconPurple),
                             Triple(Icons.Default.Yard, "Plant", IconLime),
                             Triple(Icons.Default.Laptop, "Laptop", Color.LightGray),
                             Triple(Icons.Default.Fastfood, "Fruit", IconYellow),
@@ -1787,6 +2072,213 @@ fun BarcodeScannerOverlay(
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun SinkPhotoCaptureOverlay(
+    onPhotoCaptured: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraPermissionState = rememberPermissionState(
+        android.Manifest.permission.CAMERA
+    )
+    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val imageCapture = remember {
+        ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .build()
+    }
+    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    var isCapturing by remember { mutableStateOf(false) }
+    var isCameraReady by remember { mutableStateOf(false) }
+    var previewView by remember { mutableStateOf<PreviewView?>(null) }
+
+    LaunchedEffect(Unit) {
+        if (!cameraPermissionState.status.isGranted) {
+            cameraPermissionState.launchPermissionRequest()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            cameraExecutor.shutdown()
+            runCatching { cameraProviderFuture.get().unbindAll() }
+        }
+    }
+
+    LaunchedEffect(cameraPermissionState.status.isGranted, lifecycleOwner, previewView) {
+        if (!cameraPermissionState.status.isGranted) {
+            isCameraReady = false
+            return@LaunchedEffect
+        }
+        val currentPreviewView = previewView ?: return@LaunchedEffect
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(currentPreviewView.surfaceProvider)
+            }
+            try {
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    imageCapture
+                )
+                isCameraReady = true
+            } catch (_: Exception) {
+                isCameraReady = false
+                Toast.makeText(
+                    context,
+                    "Unable to open camera right now",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }, ContextCompat.getMainExecutor(context))
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            if (cameraPermissionState.status.isGranted) {
+                AndroidView(
+                    factory = { ctx ->
+                        PreviewView(ctx).apply {
+                            layoutParams = android.view.ViewGroup.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            previewView = this
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                ScannerOverlay()
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Capture Your Sink",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Point the camera at your sink and tap Capture",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = {
+                            if (!isCameraReady) {
+                                Toast.makeText(
+                                    context,
+                                    "Camera is still getting ready",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@Button
+                            }
+                            if (isCapturing) return@Button
+                            isCapturing = true
+
+                            val photoFile = File(
+                                context.filesDir,
+                                "sink_reference_${System.currentTimeMillis()}.jpg"
+                            )
+                            val outputOptions = ImageCapture.OutputFileOptions
+                                .Builder(photoFile)
+                                .build()
+
+                            imageCapture.takePicture(
+                                outputOptions,
+                                cameraExecutor,
+                                object : ImageCapture.OnImageSavedCallback {
+                                    override fun onImageSaved(
+                                        outputFileResults: ImageCapture.OutputFileResults
+                                    ) {
+                                        ContextCompat.getMainExecutor(context).execute {
+                                            isCapturing = false
+                                            onPhotoCaptured(photoFile.absolutePath)
+                                        }
+                                    }
+
+                                    override fun onError(exception: ImageCaptureException) {
+                                        ContextCompat.getMainExecutor(context).execute {
+                                            isCapturing = false
+                                            Toast.makeText(
+                                                context,
+                                                "Failed to capture photo: ${exception.message ?: "Unknown error"}",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            )
+                        },
+                        enabled = !isCapturing && isCameraReady,
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        val captureLabel = when {
+                            isCapturing -> "Capturing..."
+                            !isCameraReady -> "Preparing Camera..."
+                            else -> "Capture"
+                        }
+                        Text(captureLabel)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.2f)
+                        ),
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        "Camera permission is required to capture your sink photo",
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { cameraPermissionState.launchPermissionRequest() }) {
+                        Text("Grant Permission")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun UpgradeFeatureRow(emoji: String, text: String) {
     Row(
@@ -1804,8 +2296,7 @@ fun UpgradeFeatureRow(emoji: String, text: String) {
 }
 
 // ──────────────────────────────────────────────────
-// ──────────────────────────────────────────────────
-// ──────────────────────────────────────────────────
+
 @Composable
 fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
@@ -1860,7 +2351,7 @@ fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "If you're notorious for turning off alarms and going back to sleep, this feature is for you!\n\nAfter you dismiss the alarm, a notification will appear. Tap it to confirm you're awake — if you don't tap within 5 minutes, the alarm will ring again!",
+                    "After dismissing the alarm, tap the follow-up notification. If you don't respond within 5 minutes, the alarm rings again!",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1964,3 +2455,7 @@ fun WakeUpCheckInfoDialog(onDismiss: () -> Unit) {
         }
     }
 }
+
+
+
+

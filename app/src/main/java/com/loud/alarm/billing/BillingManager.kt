@@ -140,8 +140,9 @@ class BillingManager @Inject constructor(
             .setProductList(productList)
             .build()
 
-        billingClient?.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+        billingClient?.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                val productDetailsList = queryProductDetailsResult.productDetailsList ?: emptyList()
                 for (details in productDetailsList) {
                     when (details.productId) {
                         PRODUCT_ID_QR_CODE -> {
@@ -183,8 +184,9 @@ class BillingManager @Inject constructor(
             .setProductList(subProductList)
             .build()
 
-        billingClient?.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+        billingClient?.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                val productDetailsList = queryProductDetailsResult.productDetailsList ?: emptyList()
                 for (details in productDetailsList) {
                     when (details.productId) {
                         PRODUCT_ID_MONTHLY -> {

@@ -1,5 +1,6 @@
 package com.loud.alarm.service
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,6 +11,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -21,8 +23,9 @@ import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.loud.alarm.R
-import com.loud.alarm.ui.alarm.AlarmActivity
+import com.loud.alarm.data.AlarmRepository
 import com.loud.alarm.data.VibrationPattern
+import com.loud.alarm.ui.alarm.AlarmActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -38,35 +41,119 @@ class AlarmService : Service() {
     private var loudnessEnhancer: android.media.audiofx.LoudnessEnhancer? = null
     private var fadeAnimator: android.animation.ValueAnimator? = null
     private val timeoutHandler = Handler(Looper.getMainLooper())
+    private var currentAlarmId: Int = -1
+    private var currentVolumeBoostEnabled: Boolean = false
+    private var stopRequested: Boolean = false
+    private var restartScheduled: Boolean = false
+
+    private data class RingingContext(
+        val alarmId: Int,
+        val isVolumeBoostEnabled: Boolean
+    )
 
     companion object {
         const val CHANNEL_ID = "alarm_ringing_v2"
         const val NOTIFICATION_ID = 1
+        const val EXTRA_ALARM_ID = "ALARM_ID"
+        const val EXTRA_IS_VOLUME_BOOST_ENABLED = "IS_VOLUME_BOOST_ENABLED"
+        const val ACTION_STOP_ALARM = "com.loud.alarm.action.STOP_ALARM"
+        const val ACTION_RESHOW_ALARM = "com.loud.alarm.action.RESHOW_ALARM"
+        const val ACTION_RESTART_ALARM_SERVICE = "com.loud.alarm.action.RESTART_ALARM_SERVICE"
         private const val TAG = "AlarmService"
+        private const val STATE_PREFS = "alarm_service_state"
+        private const val PREF_LAST_ALARM_ID = "last_alarm_id"
+        private const val PREF_LAST_VOLUME_BOOST = "last_volume_boost"
         private const val BOOST_MULTIPLIER = 1.50f
         private const val MAX_LOUDNESS_ENHANCER_GAIN_MB = 10_000
+        private const val RESTART_DELAY_MS = 1_000L
+        private const val HOME_RESHOW_DELAY_MS = 450L
+        private const val VOLUME_ENFORCER_INTERVAL_MS = 750L
+        private const val ACTIVITY_WATCHDOG_INTERVAL_MS = 1_500L
+    }
+
+    private val autoSilenceRunnable = Runnable {
+        Log.w(TAG, "Auto-silencing alarm after timeout: user never dismissed")
+        stopRequested = true
+        clearPersistedRingingContext()
+        stopSelf()
+    }
+
+    private val volumeEnforcerRunnable = object : Runnable {
+        override fun run() {
+            if (stopRequested) return
+            enforceAlarmVolume(currentVolumeBoostEnabled)
+            timeoutHandler.postDelayed(this, VOLUME_ENFORCER_INTERVAL_MS)
+        }
+    }
+
+    private val activityWatchdogRunnable = object : Runnable {
+        override fun run() {
+            if (stopRequested || currentAlarmId == -1) return
+
+            if (!isAlarmActivityVisible()) {
+                Log.w(TAG, "AlarmActivity not visible; relaunching")
+                launchAlarmActivity(currentAlarmId)
+            }
+
+            timeoutHandler.postDelayed(this, ACTIVITY_WATCHDOG_INTERVAL_MS)
+        }
     }
 
     @Inject
     lateinit var settingsRepository: com.loud.alarm.data.SettingsRepository
 
+    @Inject
+    lateinit var alarmRepository: AlarmRepository
+
     override fun onBind(intent: Intent): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val alarmId = intent?.getIntExtra("ALARM_ID", -1) ?: -1
-        val isVolumeBoostEnabled = intent?.getBooleanExtra("IS_VOLUME_BOOST_ENABLED", false) ?: false
-        Log.d(TAG, "AlarmService started for alarm: $alarmId")
+        if (intent?.action == ACTION_RESHOW_ALARM) {
+            val requestedAlarmId = intent.getIntExtra(EXTRA_ALARM_ID, -1)
+            val alarmIdToRelaunch = when {
+                requestedAlarmId != -1 -> requestedAlarmId
+                currentAlarmId != -1 -> currentAlarmId
+                else -> resolveRingingContext(intent)?.alarmId ?: -1
+            }
 
-        // Read settings off main thread using a coroutine, but we need values now.
-        // Use a background thread to read, then post back to start alarm.
-        // However, for foreground service we MUST call startForeground ASAP (within 5s).
-        // So we call startForeground FIRST with the notification, then read settings async.
+            if (!stopRequested && alarmIdToRelaunch != -1) {
+                timeoutHandler.postDelayed(
+                    { if (!stopRequested) launchAlarmActivity(alarmIdToRelaunch) },
+                    HOME_RESHOW_DELAY_MS
+                )
+                Log.w(TAG, "Received re-show request; relaunching alarm screen soon")
+            } else {
+                Log.w(TAG, "Ignoring re-show request: no active alarm context")
+            }
+            return START_STICKY
+        }
+
+        if (intent?.action == ACTION_STOP_ALARM) {
+            Log.d(TAG, "Received explicit stop action")
+            stopRequested = true
+            clearPersistedRingingContext()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        val ringingContext = resolveRingingContext(intent)
+        if (ringingContext == null) {
+            Log.e(TAG, "AlarmService started without alarm context; stopping")
+            stopRequested = true
+            clearPersistedRingingContext()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        currentAlarmId = ringingContext.alarmId
+        currentVolumeBoostEnabled = ringingContext.isVolumeBoostEnabled
+        stopRequested = false
+        restartScheduled = false
+        Log.d(TAG, "AlarmService started for alarm: ${ringingContext.alarmId}")
+
         acquireWakeLock()
-        startForeground(NOTIFICATION_ID, createNotification(alarmId))
+        startForeground(NOTIFICATION_ID, createNotification(ringingContext.alarmId))
 
-        // Read settings and start alarm on a background thread to avoid ANR.
-        // Each setting read falls back independently so one failure does not
-        // accidentally force unrelated defaults (for example fade-in ON).
         Thread {
             val isVibrationEnabled = readSettingOrDefault("vibrationEnabled", true) {
                 kotlinx.coroutines.runBlocking { settingsRepository.vibrationEnabled.first() }
@@ -86,34 +173,74 @@ class AlarmService : Service() {
             ) {
                 kotlinx.coroutines.runBlocking { settingsRepository.vibrationPattern.first() }
             }
+            val selectedSoundUri = try {
+                kotlinx.coroutines.runBlocking {
+                    alarmRepository.getAlarm(ringingContext.alarmId)?.soundUri
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load alarm sound; using default", e)
+                null
+            }
 
             Handler(Looper.getMainLooper()).post {
                 startAlarm(
-                    isVolumeBoostEnabled = isVolumeBoostEnabled,
+                    isVolumeBoostEnabled = ringingContext.isVolumeBoostEnabled,
                     isVibrationEnabled = isVibrationEnabled,
                     isFadeInEnabled = isFadeInEnabled,
                     fadeInDuration = fadeInDuration,
                     autoSilenceDuration = autoSilenceDuration,
-                    vibrationPatternName = vibrationPatternName
+                    vibrationPatternName = vibrationPatternName,
+                    selectedSoundUri = selectedSoundUri
                 )
             }
         }.start()
 
-        launchAlarmActivity(alarmId)
-
-        // We will schedule auto silence in startAlarm instead
-        // scheduleAutoSilence()
+        launchAlarmActivity(ringingContext.alarmId)
+        startActivityWatchdog()
 
         return START_STICKY
     }
 
+    private fun resolveRingingContext(intent: Intent?): RingingContext? {
+        val intentAlarmId = intent?.getIntExtra(EXTRA_ALARM_ID, -1) ?: -1
+        if (intentAlarmId != -1) {
+            val intentVolumeBoost =
+                intent?.getBooleanExtra(EXTRA_IS_VOLUME_BOOST_ENABLED, false) ?: false
+            persistRingingContext(intentAlarmId, intentVolumeBoost)
+            return RingingContext(intentAlarmId, intentVolumeBoost)
+        }
+
+        val prefs = getSharedPreferences(STATE_PREFS, MODE_PRIVATE)
+        val storedAlarmId = prefs.getInt(PREF_LAST_ALARM_ID, -1)
+        if (storedAlarmId == -1) {
+            return null
+        }
+
+        val storedVolumeBoost = prefs.getBoolean(PREF_LAST_VOLUME_BOOST, false)
+        Log.w(TAG, "Recovered alarm context from persistent state (alarmId=$storedAlarmId)")
+        return RingingContext(storedAlarmId, storedVolumeBoost)
+    }
+
+    private fun persistRingingContext(alarmId: Int, isVolumeBoostEnabled: Boolean) {
+        getSharedPreferences(STATE_PREFS, MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_LAST_ALARM_ID, alarmId)
+            .putBoolean(PREF_LAST_VOLUME_BOOST, isVolumeBoostEnabled)
+            .apply()
+    }
+
+    private fun clearPersistedRingingContext() {
+        getSharedPreferences(STATE_PREFS, MODE_PRIVATE)
+            .edit()
+            .remove(PREF_LAST_ALARM_ID)
+            .remove(PREF_LAST_VOLUME_BOOST)
+            .apply()
+    }
+
     private fun scheduleAutoSilence(durationMinutes: Int) {
-        timeoutHandler.removeCallbacksAndMessages(null)
+        timeoutHandler.removeCallbacks(autoSilenceRunnable)
         val timeoutMs = durationMinutes * 60 * 1000L
-        timeoutHandler.postDelayed({
-            Log.w(TAG, "Auto-silencing alarm after timeout — user never dismissed")
-            stopSelf()
-        }, timeoutMs)
+        timeoutHandler.postDelayed(autoSilenceRunnable, timeoutMs)
     }
 
     private fun acquireWakeLock() {
@@ -122,7 +249,7 @@ class AlarmService : Service() {
             PowerManager.PARTIAL_WAKE_LOCK,
             "LoudAlarm::AlarmWakeLock"
         ).apply {
-            acquire(10 * 60 * 1000L) // 10 min max, released on destroy
+            acquire(10 * 60 * 1000L)
         }
         Log.d(TAG, "WakeLock acquired (PARTIAL)")
     }
@@ -130,12 +257,12 @@ class AlarmService : Service() {
     private fun createNotification(alarmId: Int): android.app.Notification {
         createNotificationChannel()
 
-        // This PendingIntent opens AlarmActivity when notification is tapped
         val openAlarmIntent = Intent(this, AlarmActivity::class.java).apply {
-            putExtra("ALARM_ID", alarmId)
+            putExtra(EXTRA_ALARM_ID, alarmId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_NO_USER_ACTION
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         }
         val openAlarmPendingIntent = PendingIntent.getActivity(
             this,
@@ -151,10 +278,10 @@ class AlarmService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(openAlarmPendingIntent) // Tapping opens AlarmActivity
-            .setFullScreenIntent(openAlarmPendingIntent, true) // Auto-opens when screen is off
-            .setOngoing(true) // Cannot be swiped away
-            .setAutoCancel(false) // Don't dismiss on tap
+            .setContentIntent(openAlarmPendingIntent)
+            .setFullScreenIntent(openAlarmPendingIntent, true)
+            .setOngoing(true)
+            .setAutoCancel(false)
             .build()
     }
 
@@ -163,18 +290,17 @@ class AlarmService : Service() {
             val notificationManager =
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // Delete ALL old channels
             notificationManager.deleteNotificationChannel("alarm_channel")
             notificationManager.deleteNotificationChannel("alarm_service_silent")
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Alarm Ringing",
-                NotificationManager.IMPORTANCE_HIGH // HIGH = heads-up + fullScreenIntent works
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Shows when alarm is ringing"
-                setSound(null, null) // Sound is handled by MediaPlayer
-                enableVibration(false) // Vibration is handled manually
+                setSound(null, null)
+                enableVibration(false)
                 setBypassDnd(true)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
@@ -195,8 +321,15 @@ class AlarmService : Service() {
         }
     }
 
-    private fun startAlarm(isVolumeBoostEnabled: Boolean, isVibrationEnabled: Boolean, isFadeInEnabled: Boolean, fadeInDuration: Int, autoSilenceDuration: Int, vibrationPatternName: String = VibrationPattern.DEVICE_DEFAULT.name) {
-        // Defensive cleanup if service receives another start before being destroyed.
+    private fun startAlarm(
+        isVolumeBoostEnabled: Boolean,
+        isVibrationEnabled: Boolean,
+        isFadeInEnabled: Boolean,
+        fadeInDuration: Int,
+        autoSilenceDuration: Int,
+        vibrationPatternName: String = VibrationPattern.DEVICE_DEFAULT.name,
+        selectedSoundUri: String? = null
+    ) {
         fadeAnimator?.cancel()
         fadeAnimator = null
         loudnessEnhancer?.release()
@@ -208,28 +341,39 @@ class AlarmService : Service() {
         mediaPlayer = null
         vibrator?.cancel()
 
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-        // Force max alarm volume — this is the #1 reason alarms are "too quiet"
-        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-        audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVolume, 0)
-        if (isVolumeBoostEnabled) {
-            val maxMusicVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxMusicVolume, 0)
-        }
+        enforceAlarmVolume(isVolumeBoostEnabled)
+        startVolumeEnforcer()
 
         try {
-            val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            val fallbackUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val customUri = selectedSoundUri
+                ?.takeIf { it.isNotBlank() }
+                ?.let(Uri::parse)
+            val alarmUri = customUri ?: fallbackUri
 
             if (alarmUri == null) {
-                Log.e(TAG, "No alarm/notification/ringtone URI found on this device!")
+                Log.e(TAG, "No alarm/notification/ringtone URI found on this device")
                 return
             }
 
             mediaPlayer = MediaPlayer().apply {
-                setDataSource(applicationContext, alarmUri)
+                val playbackUri = try {
+                    setDataSource(applicationContext, alarmUri)
+                    alarmUri
+                } catch (e: Exception) {
+                    if (fallbackUri != null && alarmUri != fallbackUri) {
+                        Log.w(TAG, "Selected alarm sound unavailable; falling back to default", e)
+                        reset()
+                        setDataSource(applicationContext, fallbackUri)
+                        fallbackUri
+                    } else {
+                        throw e
+                    }
+                }
+
+                Log.d(TAG, "Playing alarm sound uri: $playbackUri")
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
@@ -238,19 +382,19 @@ class AlarmService : Service() {
                 )
                 isLooping = true
                 prepare()
-                
+
                 if (isFadeInEnabled) {
                     setVolume(0f, 0f)
                 } else {
                     setVolume(1f, 1f)
                 }
-                
+
                 start()
 
                 if (isVolumeBoostEnabled) {
                     applyVolumeBoost(this, BOOST_MULTIPLIER)
                 }
-                
+
                 if (isFadeInEnabled) {
                     fadeAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                         duration = fadeInDuration * 1000L
@@ -269,7 +413,8 @@ class AlarmService : Service() {
 
         if (isVibrationEnabled) {
             vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                val vibratorManager =
+                    getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
                 vibratorManager.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
@@ -281,13 +426,14 @@ class AlarmService : Service() {
                     val selectedPattern = VibrationPattern.fromName(vibrationPatternName)
                     val pattern = selectedPattern.pattern
                     Log.d(TAG, "Using vibration pattern: ${selectedPattern.displayName}")
-                    
+
                     val audioAttributes = AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        @Suppress("DEPRECATION")
                         it.vibrate(VibrationEffect.createWaveform(pattern, 0), audioAttributes)
                     } else {
                         @Suppress("DEPRECATION")
@@ -296,7 +442,7 @@ class AlarmService : Service() {
                 }
             }
         }
-        
+
         scheduleAutoSilence(autoSilenceDuration)
     }
 
@@ -339,39 +485,135 @@ class AlarmService : Service() {
         }
     }
 
+    private fun enforceAlarmVolume(isVolumeBoostEnabled: Boolean) {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        runCatching {
+            if (audioManager.ringerMode != AudioManager.RINGER_MODE_NORMAL) {
+                audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
+            }
+        }
+
+        val maxAlarmVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+        val currentAlarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+        if (currentAlarmVolume < maxAlarmVolume) {
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxAlarmVolume, 0)
+        }
+
+        if (isVolumeBoostEnabled) {
+            val maxMusicVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            val currentMusicVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            if (currentMusicVolume < maxMusicVolume) {
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxMusicVolume, 0)
+            }
+        }
+    }
+
+    private fun startVolumeEnforcer() {
+        timeoutHandler.removeCallbacks(volumeEnforcerRunnable)
+        timeoutHandler.post(volumeEnforcerRunnable)
+    }
+
+    private fun startActivityWatchdog() {
+        timeoutHandler.removeCallbacks(activityWatchdogRunnable)
+        timeoutHandler.postDelayed(activityWatchdogRunnable, ACTIVITY_WATCHDOG_INTERVAL_MS)
+    }
+
+    private fun isAlarmActivityVisible(): Boolean {
+        return AlarmActivity.isAlarmScreenVisible
+    }
+
     private fun launchAlarmActivity(alarmId: Int) {
+        if (alarmId == -1) return
+
         val activityIntent = Intent(this, AlarmActivity::class.java).apply {
-            putExtra("ALARM_ID", alarmId)
+            putExtra(EXTRA_ALARM_ID, alarmId)
             addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK
-                        or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        or Intent.FLAG_ACTIVITY_NO_USER_ACTION
-                        or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             )
         }
 
         try {
-            startActivity(activityIntent)
-            Log.d(TAG, "AlarmActivity launched from service")
+            val launchPendingIntent = PendingIntent.getActivity(
+                this,
+                alarmId + 20_000,
+                activityIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            launchPendingIntent.send()
+            Log.d(TAG, "AlarmActivity launched from service via PendingIntent")
+        } catch (e: PendingIntent.CanceledException) {
+            Log.e(TAG, "PendingIntent canceled while launching AlarmActivity; falling back", e)
+            try {
+                startActivity(activityIntent)
+                Log.d(TAG, "AlarmActivity fallback startActivity launch succeeded")
+            } catch (fallbackError: Exception) {
+                Log.e(TAG, "Fallback startActivity launch failed", fallbackError)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start AlarmActivity from service", e)
         }
     }
 
-    /**
-     * Called when the user swipes the app away from recent apps.
-     * We must NOT let the service die — the alarm must keep ringing!
-     */
+    private fun scheduleServiceRestart() {
+        if (restartScheduled || currentAlarmId == -1) return
+
+        restartScheduled = true
+        val restartIntent = Intent(this, AlarmServiceRestartReceiver::class.java).apply {
+            action = ACTION_RESTART_ALARM_SERVICE
+            putExtra(EXTRA_ALARM_ID, currentAlarmId)
+            putExtra(EXTRA_IS_VOLUME_BOOST_ENABLED, currentVolumeBoostEnabled)
+        }
+
+        val requestCode = 70_000 + currentAlarmId
+        val pendingIntent = PendingIntent.getBroadcast(
+            this,
+            requestCode,
+            restartIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val triggerTime = System.currentTimeMillis() + RESTART_DELAY_MS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            }
+        } else {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerTime,
+                pendingIntent
+            )
+        }
+
+        Log.w(TAG, "Scheduled AlarmService restart for alarmId=$currentAlarmId")
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        Log.w(TAG, "onTaskRemoved called — alarm service continues ringing")
-        // Service has START_STICKY, so it will be restarted if killed.
-        // Nothing to do here — just log it. Do NOT call stopSelf().
+        Log.w(TAG, "onTaskRemoved called while alarm is active")
+        if (!stopRequested && currentAlarmId != -1) {
+            scheduleServiceRestart()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "AlarmService onDestroy — cleaning up resources")
+        Log.d(TAG, "AlarmService onDestroy: cleaning up resources")
         timeoutHandler.removeCallbacksAndMessages(null)
         loudnessEnhancer?.release()
         loudnessEnhancer = null
@@ -389,5 +631,15 @@ class AlarmService : Service() {
             }
         }
         wakeLock = null
+
+        if (!stopRequested && currentAlarmId != -1) {
+            Log.w(TAG, "AlarmService destroyed unexpectedly; scheduling restart")
+            scheduleServiceRestart()
+        } else {
+            clearPersistedRingingContext()
+        }
+
+        currentAlarmId = -1
+        currentVolumeBoostEnabled = false
     }
 }

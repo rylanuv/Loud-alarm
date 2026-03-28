@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -68,7 +70,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -94,11 +96,11 @@ data class RequiredPermissionsStatus(
     val missingItems: List<RequiredPermissionItem>
         get() = items.filterNot(RequiredPermissionItem::granted)
 }
-
 enum class RequiredPermissionType {
     EXACT_ALARM,
     BATTERY_OPTIMIZATION,
-    NOTIFICATIONS
+    NOTIFICATIONS,
+    CAMERA
 }
 
 @Composable
@@ -266,8 +268,12 @@ fun PermissionSetupPage(
         activePrompt = nextPrompt
 
         when (nextPrompt) {
-            RequiredPermissionType.NOTIFICATIONS -> {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            RequiredPermissionType.NOTIFICATIONS,
+            RequiredPermissionType.CAMERA -> {
+                notificationPermissionLauncher.launch(
+                    if (nextPrompt == RequiredPermissionType.NOTIFICATIONS) Manifest.permission.POST_NOTIFICATIONS
+                    else Manifest.permission.CAMERA
+                )
             }
 
             RequiredPermissionType.EXACT_ALARM,
@@ -314,16 +320,11 @@ fun PermissionSetupPage(
             PermissionMessageCard(
                 icon = Icons.Default.Warning,
                 title = "Permissions still missing",
-                body = "Loud Alarm may not function correctly without these permissions. Please turn them on before relying on the app.",
-                accent = Color(0xFFE88C7B)
+                body = "Some permissions are still off. Enable them so alarms ring reliably.",
+                accent = Color(0xFFFF453A)
             )
         } else if (status.allGranted) {
-            PermissionMessageCard(
-                icon = Icons.Default.CheckCircle,
-                title = "Everything is ready",
-                body = "All required permissions are enabled, so the app can ring and notify you reliably.",
-                accent = Color(0xFF7DD7A6)
-            )
+            CompactReadyStatus()
         }
 
         if (!status.allGranted) {
@@ -344,12 +345,35 @@ fun PermissionSetupPage(
                 )
             }
 
-            Text(
-                text = "If you continue without these, a warning will stay on the home screen until everything is enabled.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f)
-            )
+
         }
+    }
+}
+
+@Composable
+private fun CompactReadyStatus() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xFF7DD7A6).copy(alpha = 0.12f))
+            .border(1.dp, Color(0xFF7DD7A6).copy(alpha = 0.34f), RoundedCornerShape(999.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = null,
+            tint = Color(0xFF7DD7A6),
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = "All required permissions are on",
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -364,23 +388,16 @@ private fun PermissionHero(
         Box(
             modifier = Modifier
                 .size(60.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFF0C876),
-                            Color(0xFF91612A)
-                        )
-                    )
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape),
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White.copy(alpha = 0.05f))
+                .border(1.dp, Color(0xFFE0C097).copy(alpha = 0.35f), RoundedCornerShape(18.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Warning,
+                imageVector = Icons.Default.Settings,
                 contentDescription = null,
-                tint = Color(0xFF1B1208),
-                modifier = Modifier.size(28.dp)
+                tint = Color(0xFFE0C097),
+                modifier = Modifier.size(32.dp)
             )
         }
 
@@ -579,9 +596,26 @@ private fun Context.readRequiredPermissionsStatus(): RequiredPermissionsStatus {
                 )
             )
         }
+
+        add(
+            RequiredPermissionItem(
+                type = RequiredPermissionType.CAMERA,
+                title = "Camera access",
+                description = "Required for QR code and object scanning challenges.",
+                granted = hasCameraPermission(),
+                icon = Icons.Default.CameraAlt
+            )
+        )
     }
 
     return RequiredPermissionsStatus(items = items)
+}
+
+private fun Context.hasCameraPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.CAMERA
+    ) == PackageManager.PERMISSION_GRANTED
 }
 
 private fun Context.canScheduleExactAlarms(): Boolean {
@@ -637,6 +671,12 @@ private fun RequiredPermissionType.buildIntent(context: Context): Intent {
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                 putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             },
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = packageUri
+            }
+        )
+
+        RequiredPermissionType.CAMERA -> listOf(
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = packageUri
             }

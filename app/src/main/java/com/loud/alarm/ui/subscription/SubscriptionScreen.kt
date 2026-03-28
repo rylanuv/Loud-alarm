@@ -15,7 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Gamepad
@@ -125,95 +125,116 @@ fun SubscriptionScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Support the development and get all premium tools to guarantee you never sleep in.",
+                    text = "Get all premium tools to guarantee you never sleep in.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Wake Up Check Hero Feature
+                // Hero Feature: Wake Up Check with Offset Design
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(activeColor.copy(alpha = 0.15f))
-                        .border(1.dp, activeColor.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                        .padding(top = 32.dp, bottom = 12.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(24.dp))
                         .padding(20.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(activeColor.copy(alpha = 0.2f)),
+                                .size(64.dp)
+                                .offset(x = (-10).dp) // Offset for dynamic look
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFF4CAF50).copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = activeColor, modifier = Modifier.size(32.dp))
+                            Icon(
+                                Icons.Default.CheckCircle, 
+                                contentDescription = null, 
+                                tint = Color(0xFF4CAF50), // Changed to Green
+                                modifier = Modifier.size(36.dp)
+                            )
                         }
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Wake Up Check", color = activeColor, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(4.dp))
-                            Text("We'll proactively verify you are truly awake after the alarm.", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)
+                        
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            Text(
+                                "Wake Up Check", 
+                                color = activeColor, 
+                                fontSize = 22.sp, 
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                "The ultimate safeguard to ensure you're truly awake after the alarm stops.", 
+                                color = Color.White.copy(alpha = 0.8f), 
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // Challenges Category
-                Text("PREMIUM CHALLENGES", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.fillMaxWidth())
+                // Unified Value Section
+                Text("WHAT YOU GET", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(16.dp))
                 
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        UpgradeFeatureRowCompact(Icons.Default.Edit, "Rewrite", IconYellow, Modifier.weight(1f))
-                        UpgradeFeatureRowCompact(Icons.Default.DirectionsWalk, "Steps", IconOrange, Modifier.weight(1f))
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        UpgradeFeatureRowCompact(Icons.Default.Gamepad, "Maze", IconGreen, Modifier.weight(1f))
-                        UpgradeFeatureRowCompact(Icons.Default.Psychology, "Memory", IconPink, Modifier.weight(1f))
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        UpgradeFeatureRowCompact(Icons.Default.Spellcheck, "Spell Bee", IconAmber, Modifier.weight(1f))
-                        UpgradeFeatureRowCompact(Icons.Default.Extension, "Puzzle", IconIndigo, Modifier.weight(1f))
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        UpgradeFeatureRowCompact(Icons.Default.Vibration, "Shake", IconCyan, Modifier.weight(1f))
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Premium Benefits Category
-                Text("PREMIUM BENEFITS", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(16.dp))
-                
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BenefitCard(
+                    BenefitItem(
                         icon = Icons.Default.CheckCircle, 
-                        title = "Guaranteed Wake Up Check", 
-                        color = activeColor, 
-                        subtitle = "A proactive second-layer of defense to verify you are truly awake after the alarm stops."
+                        title = "Wake-up verification", 
+                        subtitle = "Proactive checks to verify alertness."
                     )
-                    BenefitCard(
+                    BenefitItem(
                         icon = Icons.Default.Extension, 
-                        title = "7+ Advanced Challenges", 
-                        color = activeColor, 
-                        subtitle = "Unlock the entire library of challenges like Maze, Memory, Steps, Spell Bee and many more."
+                        title = "Advanced challenges", 
+                        subtitle = "Full access to our entire challenge library."
                     )
-                    BenefitCard(
+                    BenefitItem(
                         icon = Icons.Default.Vibration, 
-                        title = "Custom Vibrations", 
-                        color = activeColor, 
-                        subtitle = "Access custom, higher-intensity vibration patterns."
+                        title = "Custom vibrations", 
+                        subtitle = "Exclusive high-intensity vibration patterns."
                     )
                 }
 
                 Spacer(modifier = Modifier.height(40.dp))
+
+                // Grouped Challenges Section
+                // Brain Challenges
+                Text("BRAIN CHALLENGES", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        UpgradeFeatureRowCompact(Icons.Default.Psychology, "Memory", IconPink, Modifier.weight(1f))
+                        UpgradeFeatureRowCompact(Icons.Default.Extension, "Puzzle", IconIndigo, Modifier.weight(1f))
+                    }
+                    UpgradeFeatureRowCompact(Icons.Default.Spellcheck, "Spell Bee", IconAmber, Modifier.fillMaxWidth(0.5f))
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Physical Challenges
+                Text("PHYSICAL CHALLENGES", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    UpgradeFeatureRowCompact(Icons.AutoMirrored.Filled.DirectionsWalk, "Steps", IconOrange, Modifier.weight(1f))
+                    UpgradeFeatureRowCompact(Icons.Default.Vibration, "Shake", IconCyan, Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Hardcore Challenges
+                Text("HARDCORE CHALLENGES", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    UpgradeFeatureRowCompact(Icons.Default.Gamepad, "Maze", IconGreen, Modifier.weight(1f))
+                    UpgradeFeatureRowCompact(Icons.Default.Edit, "Rewrite", IconYellow, Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(64.dp))
 
                 // Pricing Cards
                 // Lifetime Plan
@@ -389,7 +410,7 @@ fun SubscriptionScreen(
 }
 
 @Composable
-fun CustomRadioButton(selected: Boolean, color: Color) {
+private fun CustomRadioButton(selected: Boolean, color: Color) {
     Box(
         modifier = Modifier
             .size(24.dp)
@@ -438,32 +459,21 @@ private fun UpgradeFeatureRowCompact(icon: ImageVector, text: String, iconColor:
         )
     }
 }
+
 @Composable
-private fun BenefitCard(icon: ImageVector, title: String, color: Color, subtitle: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(2.dp))
-                Text(subtitle, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, lineHeight = 16.sp)
-            }
+private fun BenefitItem(icon: ImageVector, title: String, subtitle: String) {
+    Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = PrimaryAccent,
+            modifier = Modifier.size(20.dp).padding(top = 2.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, lineHeight = 18.sp)
         }
     }
 }
+

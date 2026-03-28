@@ -64,7 +64,7 @@ class OnboardingViewModel @Inject constructor(
                     minute = state.minute,
                     enabled = true,
                     daysOfWeek = state.daysOfWeek,
-                    label = "Wake Up",
+                    label = "",
                     challengeTypes = state.challengeTypes
                 )
                 val alarmId = alarmRepository.insert(alarm).toInt()

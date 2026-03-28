@@ -61,11 +61,13 @@ class AlarmEditorViewModel @Inject constructor(
                     soundUri = alarm.soundUri,
                     challengeTypes = alarm.challengeTypes,
                     mathDifficulty = alarm.mathDifficulty,
+                    mazeDifficulty = alarm.mazeDifficulty,
                     barcodeValue = alarm.barcodeValue,
                     isVolumeBoostEnabled = alarm.isVolumeBoostEnabled,
                     wakeUpCheckMinutes = alarm.wakeUpCheckMinutes,
                     rewriteText = alarm.rewriteText,
                     stepCount = alarm.stepCount,
+                    shakeCount = alarm.shakeCount,
                     sinkImageUri = alarm.sinkImageUri,
                     scanObjectLabel = alarm.scanObjectLabel,
                     timePickerVersion = _uiState.value.timePickerVersion + 1
@@ -80,6 +82,10 @@ class AlarmEditorViewModel @Inject constructor(
 
     fun updateLabel(label: String) {
         _uiState.value = _uiState.value.copy(label = label)
+    }
+
+    fun updateSoundUri(soundUri: String?) {
+        _uiState.value = _uiState.value.copy(soundUri = soundUri)
     }
 
     fun toggleDay(day: Int) {
@@ -100,18 +106,24 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isVolumeBoostEnabled = enabled)
     }
     
-    fun toggleChallengeType(type: ChallengeType) {
+    fun toggleChallengeType(
+        type: ChallengeType,
+        maxActiveChallenges: Int = Int.MAX_VALUE
+    ): Boolean {
         val current = _uiState.value.challengeTypes.toMutableSet()
         if (type == ChallengeType.NONE) {
             // Selecting NONE clears everything else
             _uiState.value = _uiState.value.copy(challengeTypes = setOf(ChallengeType.NONE))
-            return
+            return true
         }
         // Remove NONE when selecting any real challenge
         current.remove(ChallengeType.NONE)
         if (current.contains(type)) {
             current.remove(type)
         } else {
+            if (current.size >= maxActiveChallenges) {
+                return false
+            }
             current.add(type)
         }
         // If nothing selected, default back to NONE
@@ -119,10 +131,15 @@ class AlarmEditorViewModel @Inject constructor(
             current.add(ChallengeType.NONE)
         }
         _uiState.value = _uiState.value.copy(challengeTypes = current)
+        return true
     }
 
     fun updateMathDifficulty(difficulty: MathDifficulty) {
         _uiState.value = _uiState.value.copy(mathDifficulty = difficulty)
+    }
+
+    fun updateMazeDifficulty(difficulty: MathDifficulty) {
+        _uiState.value = _uiState.value.copy(mazeDifficulty = difficulty)
     }
 
     fun updateBarcodeValue(value: String?) {
@@ -139,6 +156,10 @@ class AlarmEditorViewModel @Inject constructor(
 
     fun updateStepCount(count: Int) {
         _uiState.value = _uiState.value.copy(stepCount = count)
+    }
+
+    fun updateShakeCount(count: Int) {
+        _uiState.value = _uiState.value.copy(shakeCount = count)
     }
 
     fun updateSinkImageUri(uri: String?) {
@@ -161,11 +182,13 @@ class AlarmEditorViewModel @Inject constructor(
                 soundUri = state.soundUri,
                 challengeTypes = state.challengeTypes,
                 mathDifficulty = state.mathDifficulty,
+                mazeDifficulty = state.mazeDifficulty,
                 barcodeValue = state.barcodeValue,
                 isVolumeBoostEnabled = state.isVolumeBoostEnabled,
                 wakeUpCheckMinutes = state.wakeUpCheckMinutes,
                 rewriteText = state.rewriteText,
                 stepCount = state.stepCount,
+                shakeCount = state.shakeCount,
                 sinkImageUri = state.sinkImageUri,
                 scanObjectLabel = state.scanObjectLabel,
                 enabled = true
@@ -191,11 +214,13 @@ data class AlarmUiState(
     val soundUri: String? = null,
     val challengeTypes: Set<ChallengeType> = setOf(ChallengeType.NONE),
     val mathDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val mazeDifficulty: MathDifficulty = MathDifficulty.EASY,
     val barcodeValue: String? = null,
     val isVolumeBoostEnabled: Boolean = false,
     val wakeUpCheckMinutes: Int = 0,
     val rewriteText: String = "",
     val stepCount: Int = 30,
+    val shakeCount: Int = 30,
     val sinkImageUri: String? = null,
     val scanObjectLabel: String = "",
     val timePickerVersion: Int = 0

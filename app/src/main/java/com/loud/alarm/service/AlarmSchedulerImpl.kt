@@ -25,8 +25,8 @@ class AlarmSchedulerImpl @Inject constructor(
 
     override fun schedule(alarm: Alarm) {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
-            putExtra("ALARM_ID", alarm.id)
-            putExtra("IS_VOLUME_BOOST_ENABLED", alarm.isVolumeBoostEnabled)
+            putExtra(AlarmService.EXTRA_ALARM_ID, alarm.id)
+            putExtra(AlarmService.EXTRA_IS_VOLUME_BOOST_ENABLED, alarm.isVolumeBoostEnabled)
         }
         
         val pendingIntent = PendingIntent.getBroadcast(
@@ -40,7 +40,7 @@ class AlarmSchedulerImpl @Inject constructor(
 
         // Create a PendingIntent for the AlarmActivity to show in the status bar alarm icon
         val showIntent = Intent(context, AlarmActivity::class.java).apply {
-            putExtra("ALARM_ID", alarm.id)
+            putExtra(AlarmService.EXTRA_ALARM_ID, alarm.id)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val showPendingIntent = PendingIntent.getActivity(
@@ -99,6 +99,54 @@ class AlarmSchedulerImpl @Inject constructor(
         alarmManager.cancel(pendingIntent)
         pendingIntent.cancel()
         Log.d(TAG, "Alarm ${alarm.id} cancelled")
+    }
+
+    override fun scheduleSnooze(alarm: Alarm, delayMinutes: Int) {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra(AlarmService.EXTRA_ALARM_ID, alarm.id)
+            putExtra(AlarmService.EXTRA_IS_VOLUME_BOOST_ENABLED, alarm.isVolumeBoostEnabled)
+        }
+
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            alarm.id,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val triggerTime = System.currentTimeMillis() + (delayMinutes * 60 * 1000L)
+
+        val showIntent = Intent(context, AlarmActivity::class.java).apply {
+            putExtra(AlarmService.EXTRA_ALARM_ID, alarm.id)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val showPendingIntent = PendingIntent.getActivity(
+            context,
+            alarm.id,
+            showIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerTime, showPendingIntent)
+
+        try {
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            Log.d(TAG, "Snooze for alarm ${alarm.id} scheduled in $delayMinutes minutes at ${
+                java.time.Instant.ofEpochMilli(triggerTime).atZone(ZoneId.systemDefault())
+            }")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException scheduling snooze, falling back", e)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+                }
+                Log.d(TAG, "Snooze for alarm ${alarm.id} scheduled with fallback method")
+            } catch (e2: Exception) {
+                Log.e(TAG, "All snooze scheduling methods failed for alarm ${alarm.id}", e2)
+            }
+        }
     }
 
     private fun calculateTriggerTime(alarm: Alarm): Long {

@@ -61,8 +61,7 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
         if (userSequence.isNotEmpty()) {
             val isCorrectSoFar = userSequence.indices.all { i -> userSequence[i] == sequence[i] }
             if (!isCorrectSoFar) {
-                // Incorrect, flash red and restart level
-                userSequence = emptyList()
+                // Incorrect input: replay the same sequence, then clear input.
                 isShowingSequence = true
                 for (tile in sequence) {
                     activeTile = tile
@@ -70,6 +69,8 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
                     activeTile = null
                     delay(200)
                 }
+                activeTile = null
+                userSequence = emptyList()
                 isShowingSequence = false
             } else if (userSequence.size == sequence.size) {
                 if (level >= 3) {

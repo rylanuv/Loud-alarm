@@ -25,9 +25,10 @@ class WakeUpCheckReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val alarmId = intent.getIntExtra("ALARM_ID", -1)
+        val alarmId = intent.getIntExtra(AlarmService.EXTRA_ALARM_ID, -1)
         val alarmLabel = intent.getStringExtra("ALARM_LABEL") ?: ""
-        val isVolumeBoostEnabled = intent.getBooleanExtra("IS_VOLUME_BOOST_ENABLED", false)
+        val isVolumeBoostEnabled =
+            intent.getBooleanExtra(AlarmService.EXTRA_IS_VOLUME_BOOST_ENABLED, false)
         Log.d(TAG, "Wake Up Check triggered for alarm: $alarmId")
 
         createNotificationChannel(context)
@@ -75,8 +76,8 @@ class WakeUpCheckReceiver : BroadcastReceiver() {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         val reRingIntent = Intent(context, AlarmReceiver::class.java).apply {
-            putExtra("ALARM_ID", alarmId)
-            putExtra("IS_VOLUME_BOOST_ENABLED", isVolumeBoostEnabled)
+            putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
+            putExtra(AlarmService.EXTRA_IS_VOLUME_BOOST_ENABLED, isVolumeBoostEnabled)
         }
         val reRingPendingIntent = PendingIntent.getBroadcast(
             context,

@@ -38,13 +38,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.layout.Arrangement
 import androidx.core.content.ContextCompat
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
@@ -60,6 +64,7 @@ import java.util.concurrent.Executors
  * @param onSuccess Called when the target object is detected
  * @param onFallbackToMath Optional fallback to math challenge
  */
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ScanChallengeScreen(
     targetLabel: String,
@@ -72,12 +77,23 @@ fun ScanChallengeScreen(
     var hasMatched by remember { mutableStateOf(false) }
     var matchConfidence by remember { mutableStateOf(0f) }
 
+    val cameraPermissionState = rememberPermissionState(
+        android.Manifest.permission.CAMERA
+    )
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (!cameraPermissionState.status.isGranted) {
+            cameraPermissionState.launchPermissionRequest()
+        }
+    }
+
     val targetLower = targetLabel.lowercase()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Camera preview with image labeling
-        ImageLabelingCameraPreview(
-            onLabelsDetected = { labels ->
+        if (cameraPermissionState.status.isGranted) {
+            // Camera preview with image labeling
+            ImageLabelingCameraPreview(
+                onLabelsDetected = { labels ->
                 detectedLabels = labels.map { it.first }
                 // Check if any detected label matches the target
                 val match = labels.find { (label, _confidence) ->
@@ -150,6 +166,50 @@ fun ScanChallengeScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.7f)
                     )
+                }
+            }
+        }
+    } else {
+            // Permission not granted UI
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.8f))
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Camera Permission Required",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "This challenge needs camera access to detect the target object.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                androidx.compose.material3.Button(
+                    onClick = { cameraPermissionState.launchPermissionRequest() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Grant Permission")
+                }
+                
+                if (onFallbackToMath != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TextButton(onClick = onFallbackToMath) {
+                        Text(
+                            "Use Math instead",
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
         }

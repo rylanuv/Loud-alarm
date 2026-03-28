@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loud.alarm.data.VibrationPattern
+import com.loud.alarm.ui.components.PremiumSubscriptionCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,7 +86,7 @@ fun SettingsScreen(
     val vibrationPatternName by viewModel.vibrationPattern.collectAsState()
     val selectedVibrationPattern = VibrationPattern.fromName(vibrationPatternName)
     var showVibrationPatternDialog by remember { mutableStateOf(false) }
-    val isPremium by viewModel.isPremiumPurchased.collectAsState()
+    val isPremium by viewModel.isPremium.collectAsState()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -210,118 +211,11 @@ fun SettingsScreen(
             }
 
             item {
-                val premiumSurfaceGradient = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF2B241B),
-                        Color(0xFF1B160F),
-                        Color(0xFF120F0B)
-                    )
+                PremiumSubscriptionCard(
+                    isPremium = isPremium,
+                    onClick = onNavigateToSubscription,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-                val premiumAccentGradient = Brush.linearGradient(
-                    colors = listOf(Color(0xFFF4C96A), Color(0xFFE3A23D))
-                )
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onNavigateToSubscription),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(premiumSurfaceGradient)
-                            .border(
-                                width = 1.dp,
-                                color = Color(0xFFE2B660).copy(alpha = 0.45f),
-                                shape = RoundedCornerShape(22.dp)
-                            )
-                            .padding(20.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.radialGradient(
-                                            colors = listOf(
-                                                Color(0xFFF9D985),
-                                                Color(0xFFC4812A)
-                                            )
-                                        )
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = Color(0xFFF1C56A).copy(alpha = 0.55f),
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "Premium",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isPremium) "Manage Subscription" else "Upgrade to Pro",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color(0xFFF1CC73),
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = if (isPremium) "Update subscription details" else "Unlock all premium features, ad-free experience & exclusive sounds!",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    lineHeight = 16.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = if (isPremium) "Tap to manage subscription" else "Tap to view subscription",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color(0xFFF2CB76),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(premiumAccentGradient)
-                                    .border(
-                                        width = 1.dp,
-                                        color = Color.White.copy(alpha = 0.35f),
-                                        shape = RoundedCornerShape(999.dp)
-                                    )
-                                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = if (isPremium) "Manage" else "Subscribe",
-                                        color = Color(0xFF2D1A05),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = ">",
-                                        color = Color(0xFF2D1A05),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
             }
 
             // Troubleshooting Section
@@ -370,7 +264,7 @@ fun SettingsScreen(
                 }
                 
                 item {
-                    val isPremiumPurchased by viewModel.isPremiumPurchased.collectAsState()
+                    val isPremiumPurchased by viewModel.isPremium.collectAsState()
                     val nextAlarm by viewModel.nextAlarm.collectAsState()
                     val context = androidx.compose.ui.platform.LocalContext.current
                     SettingsCard {

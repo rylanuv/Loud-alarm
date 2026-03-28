@@ -20,15 +20,15 @@ object MathProblemGenerator {
     }
 
     private fun generateEasyProblem(): MathProblem {
-        // 2-digit addition/subtraction
-        val a = Random.nextInt(10, 99)
-        val b = Random.nextInt(10, 99)
+        // Smaller, friendlier numbers for quicker mental math
+        val a = Random.nextInt(5, 31)
+        val b = Random.nextInt(1, 21)
         val isAddition = Random.nextBoolean()
 
         return if (isAddition) {
             MathProblem("$a + $b = ?", a + b)
         } else {
-            // Ensure positive result for simplicity or allow negative? Let's ensure a >= b
+            // Keep subtraction straightforward with non-negative answers
             val max = maxOf(a, b)
             val min = minOf(a, b)
             MathProblem("$max - $min = ?", max - min)
@@ -36,10 +36,10 @@ object MathProblemGenerator {
     }
 
     private fun generateMediumProblem(): MathProblem {
-        // Multi-step: (a + b) * c or similar
-        val a = Random.nextInt(10, 50)
-        val b = Random.nextInt(10, 50)
-        val c = Random.nextInt(2, 6)
+        // Still multi-step, but with simpler ranges
+        val a = Random.nextInt(6, 26)
+        val b = Random.nextInt(6, 26)
+        val c = Random.nextInt(2, 5)
 
         val operation = Random.nextInt(3)
         return when (operation) {

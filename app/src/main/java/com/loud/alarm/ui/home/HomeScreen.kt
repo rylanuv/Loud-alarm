@@ -322,6 +322,7 @@ fun SwipeableAlarmItem(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    @Suppress("DEPRECATION")
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (it == SwipeToDismissBoxValue.EndToStart) {
@@ -462,6 +463,8 @@ fun AlarmItemContent(
                                 ChallengeType.SHAKE -> "Shake"
                                 ChallengeType.SPELL_BEE -> "Spell Bee"
                                 ChallengeType.PUZZLE -> "Puzzle"
+                                ChallengeType.SCAN_SINK -> "Scan Sink"
+                                ChallengeType.SCAN_OBJECT -> "Scan Object"
                                 else -> type.name
                             }
                         }

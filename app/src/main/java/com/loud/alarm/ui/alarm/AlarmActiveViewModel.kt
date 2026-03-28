@@ -1,5 +1,6 @@
 package com.loud.alarm.ui.alarm
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loud.alarm.data.Alarm
@@ -21,15 +22,32 @@ class AlarmActiveViewModel @Inject constructor(
     private val scheduler: com.loud.alarm.service.AlarmScheduler,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+    companion object {
+        private const val TAG = "AlarmActiveViewModel"
+    }
 
     private val _alarm = MutableStateFlow<Alarm?>(null)
     val alarm: StateFlow<Alarm?> = _alarm.asStateFlow()
+    private val _loadError = MutableStateFlow<String?>(null)
+    val loadError: StateFlow<String?> = _loadError.asStateFlow()
     val snoozeEnabled: StateFlow<Boolean> = settingsRepository.snoozeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     fun loadAlarm(id: Int) {
         viewModelScope.launch {
-            _alarm.value = repository.getAlarm(id)
+            _loadError.value = null
+            _alarm.value = null
+            try {
+                val loaded = repository.getAlarm(id)
+                if (loaded == null) {
+                    _loadError.value = "Alarm not found"
+                } else {
+                    _alarm.value = loaded
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load alarm id=$id", e)
+                _loadError.value = "Could not load this alarm"
+            }
         }
     }
 
@@ -37,26 +55,10 @@ class AlarmActiveViewModel @Inject constructor(
         viewModelScope.launch {
             if (!settingsRepository.snoozeEnabled.first()) return@launch
 
-            val now = java.time.LocalTime.now()
-            val snoozeTime = now.plusMinutes(minutes.toLong())
-            
-            val snoozedAlarm = Alarm(
-                hour = snoozeTime.hour,
-                minute = snoozeTime.minute,
-                daysOfWeek = emptySet(),
-                label = "Snooze: ${alarm.label}",
-                soundUri = alarm.soundUri,
-                challengeTypes = alarm.challengeTypes,
-                mathDifficulty = alarm.mathDifficulty,
-                barcodeValue = alarm.barcodeValue,
-                isVolumeBoostEnabled = alarm.isVolumeBoostEnabled,
-                sinkImageUri = alarm.sinkImageUri,
-                scanObjectLabel = alarm.scanObjectLabel,
-                enabled = true
-            )
-            
-            val newId = repository.insert(snoozedAlarm)
-            scheduler.schedule(snoozedAlarm.copy(id = newId.toInt()))
+            // Schedule the same alarm to fire again after the snooze duration.
+            // No new alarm is created — we just re-schedule the existing one.
+            scheduler.scheduleSnooze(alarm, minutes)
+            Log.d(TAG, "Snoozed alarm ${alarm.id} for $minutes minutes")
         }
     }
 }

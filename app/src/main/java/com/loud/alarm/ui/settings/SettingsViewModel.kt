@@ -46,7 +46,7 @@ class SettingsViewModel @Inject constructor(
     val autoSilenceDuration: StateFlow<Int> = settingsRepository.autoSilenceDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15)
         
-    val isPremiumPurchased: StateFlow<Boolean> = billingManager.isQrCodePurchased
+    val isPremium: StateFlow<Boolean> = billingManager.isSubscribed
 
     val vibrationPattern: StateFlow<String> = settingsRepository.vibrationPattern
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), VibrationPattern.DEVICE_DEFAULT.name)

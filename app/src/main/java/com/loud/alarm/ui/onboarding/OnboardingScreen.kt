@@ -148,8 +148,8 @@ fun OnboardingScreen(
                         onSelect = viewModel::selectFreeChallenge
                     )
                     3 -> PermissionSetupPage(
-                        title = "Turn on the permissions alarms depend on",
-                        description = "We will prompt for the required permissions as soon as this page opens. If any stay off, the app may not function correctly.",
+                        title = "Enable required permissions",
+                        description = "Tap each item once and make sure they all show On.",
                         isVisible = true
                     )
                     else -> ReadyPage(
@@ -272,73 +272,27 @@ private fun IntroTimelinePage() {
             .padding(top = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .graphicsLayer(alpha = alphaAnim)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.White.copy(alpha = 0.08f))
-                .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(18.dp))
-                .padding(horizontal = 14.dp, vertical = 8.dp)
-        ) {
-            Text(
-                text = "MORNING MODE",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.9f),
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.8.sp
-            )
-        }
-        Spacer(modifier = Modifier.height(22.dp))
+
 
         Text(
-            text = "One alarm.",
+            text = "One alarm. Zero excuses.",
             style = MaterialTheme.typography.headlineLarge,
             color = Color.White,
             fontWeight = FontWeight.ExtraBold,
             modifier = Modifier.graphicsLayer(alpha = alphaAnim),
             textAlign = TextAlign.Center
         )
+        Spacer(modifier = Modifier.height(10.dp))
         Text(
-            text = "Zero excuses.",
-            style = MaterialTheme.typography.headlineLarge,
-            color = Color(0xFF65F0BE),
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.graphicsLayer(alpha = alphaAnim),
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "The first ring should be your only ring.",
-            style = MaterialTheme.typography.titleLarge,
+            text = "Lock in your morning before your brain starts bargaining.",
+            style = MaterialTheme.typography.titleMedium,
             color = Color.White.copy(alpha = 0.84f),
             textAlign = TextAlign.Center,
-            modifier = Modifier.graphicsLayer(alpha = alphaAnim),
+            modifier = Modifier.graphicsLayer(alpha = alphaAnim).padding(horizontal = 24.dp),
             fontWeight = FontWeight.SemiBold
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Solve a quick challenge and your morning is locked in before your brain starts bargaining.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.72f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .graphicsLayer(alpha = alphaAnim)
-                .padding(horizontal = 10.dp)
-        )
-        Spacer(modifier = Modifier.height(14.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IntroProofChip(
-                label = "No accidental stop",
-                accent = Color(0xFF65F0BE)
-            )
-            IntroProofChip(
-                label = "Consistency first",
-                accent = Color(0xFFFFBF72)
-            )
-        }
+        Spacer(modifier = Modifier.height(20.dp))
+
         Spacer(modifier = Modifier.height(28.dp))
 
         Box(
@@ -535,14 +489,21 @@ private fun ReadyPage(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF4CD9A1).copy(alpha = 0.2f))
-                    .border(2.dp, Color(0xFF4CD9A1).copy(alpha = 0.8f), CircleShape),
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF4CD9A1),
+                                Color(0xFF2EB77F)
+                            )
+                        )
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
-                    tint = Color(0xFF4CD9A1),
+                    tint = Color.White,
                     modifier = Modifier.size(44.dp).graphicsLayer(scaleX = scaleAnim, scaleY = scaleAnim)
                 )
             }
@@ -779,34 +740,7 @@ private fun FreeChallengeItem(
     }
 }
 
-@Composable
-private fun IntroProofChip(
-    label: String,
-    accent: Color
-) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(accent.copy(alpha = 0.14f))
-            .border(1.dp, accent.copy(alpha = 0.24f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(accent)
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.White.copy(alpha = 0.92f),
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
+
 
 @Composable
 private fun MorningMomentumCard() {
@@ -903,11 +837,11 @@ private fun MorningMomentumCard() {
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "People fail when alarms are easy to cheat. This flow removes the loophole.",
+                    text = "Easy alarms are easy to cheat. This path locks in your morning.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.76f),
+                    color = Color.White.copy(alpha = 0.8f),
                     fontWeight = FontWeight.Medium
                 )
 
@@ -921,8 +855,8 @@ private fun MorningMomentumCard() {
                     MorningPathCard(
                         modifier = Modifier.weight(1f),
                         title = "Snooze spiral",
-                        caption = "Alarm -> snooze -> rush",
                         accent = Color(0xFFFFBF72),
+                        steps = listOf("Alarm", "Snooze", "Late"),
                         stepIcons = listOf(
                             Icons.Default.Alarm,
                             Icons.Default.Bedtime,
@@ -934,8 +868,8 @@ private fun MorningMomentumCard() {
                     MorningPathCard(
                         modifier = Modifier.weight(1f),
                         title = "Wake flow",
-                        caption = "Alarm -> solve -> up",
                         accent = Color(0xFF65F0BE),
+                        steps = listOf("Alarm", "Solve", "Up"),
                         stepIcons = listOf(
                             Icons.Default.Alarm,
                             Icons.Default.Calculate,
@@ -961,7 +895,7 @@ private fun MorningMomentumCard() {
                     MomentumMetric(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Check,
-                        label = "One win stacks",
+                        label = "Start with a win",
                         accent = Color(0xFF65F0BE)
                     )
                 }
@@ -996,8 +930,8 @@ private fun IntroModeChip(
 private fun MorningPathCard(
     modifier: Modifier = Modifier,
     title: String,
-    caption: String,
     accent: Color,
+    steps: List<String>,
     stepIcons: List<androidx.compose.ui.graphics.vector.ImageVector>,
     progress: Float,
     isPositive: Boolean
@@ -1009,72 +943,70 @@ private fun MorningPathCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color.Black.copy(alpha = 0.16f))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp))
+                .height(200.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.Black.copy(alpha = 0.22f))
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(24.dp))
         ) {
+            // Path Line
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .width(8.dp)
-                    .height(152.dp)
+                    .align(Alignment.CenterStart)
+                    .padding(start = 24.dp)
+                    .width(3.dp)
+                    .height(130.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
+                    .background(Color.White.copy(alpha = 0.12f))
             )
+
+            // Progress Filler
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 34.dp)
-                    .width(8.dp)
-                    .height(152.dp * progress)
+                    .align(Alignment.TopStart)
+                    .padding(start = 24.dp, top = 35.dp)
+                    .width(3.dp)
+                    .height(130.dp * progress)
                     .clip(CircleShape)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                accent.copy(alpha = 0.95f),
-                                if (isPositive) Color(0xFF4DD6F3) else Color(0xFFFF9C6A)
+                                accent,
+                                if (isPositive) Color(0xFF65F0BE) else Color(0xFFFF7C6D)
                             )
                         )
                     )
             )
-            MorningStepNode(
-                icon = stepIcons.getOrElse(0) { Icons.Default.Alarm },
-                tint = accent,
+
+            Column(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 22.dp)
-                    .graphicsLayer(alpha = progress)
-            )
-            MorningStepNode(
-                icon = stepIcons.getOrElse(1) { Icons.Default.Calculate },
-                tint = accent.copy(alpha = 0.88f),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .graphicsLayer(alpha = progress)
-            )
-            MorningStepNode(
-                icon = stepIcons.getOrElse(2) { Icons.Default.Check },
-                tint = if (isPositive) Color(0xFF65F0BE) else Color(0xFFFF7C6D),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 22.dp)
-                    .graphicsLayer(alpha = progress)
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = 14.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(accent.copy(alpha = 0.14f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .fillMaxSize()
+                    .padding(vertical = 15.dp, horizontal = 12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = if (isPositive) "up" else "loop",
-                    color = accent,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                repeat(3) { index ->
+                    Row(
+                        modifier = Modifier.graphicsLayer(
+                           alpha = if (progress >= (index.toFloat() / 2f)) 1f else 0.3f
+                        ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MorningStepNode(
+                            icon = stepIcons[index],
+                            tint = if (index == 2 && !isPositive) Color(0xFFFF7C6D)
+                                   else if (index == 2 && isPositive) Color(0xFF65F0BE)
+                                   else accent,
+                            size = 32.dp,
+                            iconSize = 16.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = steps[index],
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
@@ -1084,13 +1016,6 @@ private fun MorningPathCard(
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold
         )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = caption,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.64f),
-            textAlign = TextAlign.Center
-        )
     }
 }
 
@@ -1098,21 +1023,23 @@ private fun MorningPathCard(
 private fun MorningStepNode(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     tint: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 44.dp,
+    iconSize: androidx.compose.ui.unit.Dp = 20.dp
 ) {
     Box(
         modifier = modifier
-            .size(52.dp)
+            .size(size)
             .clip(CircleShape)
             .background(Color(0xFF121A23))
-            .border(1.5.dp, tint.copy(alpha = 0.42f), CircleShape),
+            .border(1.dp, tint.copy(alpha = 0.5f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = tint,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(iconSize)
         )
     }
 }

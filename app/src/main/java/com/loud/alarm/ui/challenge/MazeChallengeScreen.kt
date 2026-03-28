@@ -28,35 +28,69 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.loud.alarm.data.MathDifficulty
 import kotlin.math.abs
 
-private val MAZE_LEVELS = listOf(
-    listOf(
-        "S....",
-        "###.#",
-        "....#",
-        "#.###",
-        "....E"
+private val MAZE_LEVELS_BY_DIFFICULTY = mapOf(
+    MathDifficulty.EASY to listOf(
+        listOf(
+            "S....",
+            "###.#",
+            "....#",
+            "#.###",
+            "....E"
+        ),
+        listOf(
+            "S....",
+            ".###.",
+            "...#.",
+            ".#...",
+            ".###E"
+        )
     ),
-    listOf(
-        "S#...",
-        ".#.##",
-        "....#",
-        "###.#",
-        "E...."
+    MathDifficulty.MEDIUM to listOf(
+        listOf(
+            "S#....",
+            ".#.#.#",
+            ".#.#.#",
+            ".#...#",
+            ".###.#",
+            ".....E"
+        )
     ),
-    listOf(
-        "S....",
-        ".###.",
-        ".#.#.",
-        "....#",
-        "###.E"
+    MathDifficulty.HARD to listOf(
+        listOf(
+            "S.....#",
+            "#####.#",
+            "#...#.#",
+            "#.#.#.#",
+            "#.#...#",
+            "#.#####",
+            "#.....E"
+        )
+    ),
+    MathDifficulty.EXTREME to listOf(
+        listOf(
+            "S......#",
+            "######.#",
+            "#....#.#",
+            "#.##.#.#",
+            "#.##...#",
+            "#.#####.",
+            "#......#",
+            "######.E"
+        )
     )
 )
 
 @Composable
-fun MazeChallengeScreen(onSuccess: () -> Unit) {
-    val mazeRows = remember { MAZE_LEVELS.random() }
+fun MazeChallengeScreen(
+    difficulty: MathDifficulty,
+    onSuccess: () -> Unit
+) {
+    val mazeRows = remember(difficulty) {
+        (MAZE_LEVELS_BY_DIFFICULTY[difficulty] ?: MAZE_LEVELS_BY_DIFFICULTY.getValue(MathDifficulty.EASY)).random()
+    }
     val height = mazeRows.size
     val width = mazeRows.maxOfOrNull { it.length } ?: 0
 
@@ -131,7 +165,7 @@ fun MazeChallengeScreen(onSuccess: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Guide the path from S to E",
+            text = "Guide the path from S to E (${difficulty.name})",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

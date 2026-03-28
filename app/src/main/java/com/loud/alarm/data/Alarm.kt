@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import java.util.Locale
 
 enum class ChallengeType {
     NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT
@@ -25,11 +26,13 @@ data class Alarm(
     val soundUri: String? = null,
     val challengeTypes: Set<ChallengeType> = setOf(ChallengeType.NONE),
     val mathDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val mazeDifficulty: MathDifficulty = MathDifficulty.EASY,
     val barcodeValue: String? = null,
     val isVolumeBoostEnabled: Boolean = false,
     val wakeUpCheckMinutes: Int = 0,  // 0 = disabled, or 1/2/5/10/15/30 minutes
     val rewriteText: String = "",
     val stepCount: Int = 30,
+    val shakeCount: Int = 30,
     val sinkImageUri: String? = null,       // Reference image URI for scan sink challenge
     val scanObjectLabel: String = ""         // Selected object label for scan object challenge
 )
@@ -68,5 +71,22 @@ class AlarmTypeConverters {
             }
             .toSet()
             .ifEmpty { setOf(ChallengeType.NONE) }
+    }
+
+    @TypeConverter
+    fun fromMathDifficulty(value: MathDifficulty): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toMathDifficulty(value: String?): MathDifficulty {
+        if (value.isNullOrBlank()) return MathDifficulty.EASY
+        return when (value.trim().uppercase(Locale.ROOT)) {
+            "EASY" -> MathDifficulty.EASY
+            "MEDIUM", "NORMAL" -> MathDifficulty.MEDIUM
+            "HARD", "ADVANCED" -> MathDifficulty.HARD
+            "EXTREME", "VERY_HARD", "INSANE" -> MathDifficulty.EXTREME
+            else -> MathDifficulty.EASY
+        }
     }
 }
