@@ -62,14 +62,19 @@ class AlarmEditorViewModel @Inject constructor(
                     challengeTypes = alarm.challengeTypes,
                     mathDifficulty = alarm.mathDifficulty,
                     mazeDifficulty = alarm.mazeDifficulty,
+                    puzzleDifficulty = alarm.puzzleDifficulty,
                     barcodeValue = alarm.barcodeValue,
                     isVolumeBoostEnabled = alarm.isVolumeBoostEnabled,
                     wakeUpCheckMinutes = alarm.wakeUpCheckMinutes,
                     rewriteText = alarm.rewriteText,
                     stepCount = alarm.stepCount,
                     shakeCount = alarm.shakeCount,
+                    squatCount = alarm.squatCount,
+                    pushUpCount = alarm.pushUpCount,
+                    reverseTypingCount = alarm.reverseTypingCount,
                     sinkImageUri = alarm.sinkImageUri,
                     scanObjectLabel = alarm.scanObjectLabel,
+                    scanObjectExcluded = alarm.scanObjectExcluded,
                     timePickerVersion = _uiState.value.timePickerVersion + 1
                 )
             }
@@ -142,6 +147,10 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(mazeDifficulty = difficulty)
     }
 
+    fun updatePuzzleDifficulty(difficulty: MathDifficulty) {
+        _uiState.value = _uiState.value.copy(puzzleDifficulty = difficulty)
+    }
+
     fun updateBarcodeValue(value: String?) {
         _uiState.value = _uiState.value.copy(barcodeValue = value)
     }
@@ -162,12 +171,30 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(shakeCount = count)
     }
 
+    fun updateSquatCount(count: Int) {
+        _uiState.value = _uiState.value.copy(squatCount = count)
+    }
+
+    fun updatePushUpCount(count: Int) {
+        _uiState.value = _uiState.value.copy(pushUpCount = count)
+    }
+
+    fun updateReverseTypingCount(count: Int) {
+        _uiState.value = _uiState.value.copy(reverseTypingCount = count)
+    }
+
     fun updateSinkImageUri(uri: String?) {
         _uiState.value = _uiState.value.copy(sinkImageUri = uri)
     }
 
     fun updateScanObjectLabel(label: String) {
         _uiState.value = _uiState.value.copy(scanObjectLabel = label)
+    }
+
+    fun toggleScanObjectExcluded(label: String) {
+        val current = _uiState.value.scanObjectExcluded.toMutableSet()
+        if (current.contains(label)) current.remove(label) else current.add(label)
+        _uiState.value = _uiState.value.copy(scanObjectExcluded = current)
     }
 
     fun saveAlarm(onSaved: () -> Unit) {
@@ -183,14 +210,19 @@ class AlarmEditorViewModel @Inject constructor(
                 challengeTypes = state.challengeTypes,
                 mathDifficulty = state.mathDifficulty,
                 mazeDifficulty = state.mazeDifficulty,
+                puzzleDifficulty = state.puzzleDifficulty,
                 barcodeValue = state.barcodeValue,
                 isVolumeBoostEnabled = state.isVolumeBoostEnabled,
                 wakeUpCheckMinutes = state.wakeUpCheckMinutes,
                 rewriteText = state.rewriteText,
                 stepCount = state.stepCount,
                 shakeCount = state.shakeCount,
+                squatCount = state.squatCount,
+                pushUpCount = state.pushUpCount,
+                reverseTypingCount = state.reverseTypingCount,
                 sinkImageUri = state.sinkImageUri,
                 scanObjectLabel = state.scanObjectLabel,
+                scanObjectExcluded = state.scanObjectExcluded,
                 enabled = true
             )
 
@@ -221,7 +253,12 @@ data class AlarmUiState(
     val rewriteText: String = "",
     val stepCount: Int = 30,
     val shakeCount: Int = 30,
+    val squatCount: Int = 15,
+    val pushUpCount: Int = 15,
+    val reverseTypingCount: Int = 3,
     val sinkImageUri: String? = null,
     val scanObjectLabel: String = "",
+    val scanObjectExcluded: Set<String> = emptySet(),
+    val puzzleDifficulty: MathDifficulty = MathDifficulty.EASY,
     val timePickerVersion: Int = 0
 )

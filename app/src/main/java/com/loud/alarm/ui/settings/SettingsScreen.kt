@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,6 +52,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -79,14 +83,12 @@ fun SettingsScreen(
     val fadeInDuration by viewModel.fadeInDuration.collectAsState()
     val autoSilenceDuration by viewModel.autoSilenceDuration.collectAsState()
     
-    var showAboutDialog by remember { mutableStateOf(false) }
     var showFadeInWarningDialog by remember { mutableStateOf(false) }
-    var devTapCount by remember { mutableStateOf(0) }
-    var showDevOptions by remember { mutableStateOf(false) }
     val vibrationPatternName by viewModel.vibrationPattern.collectAsState()
     val selectedVibrationPattern = VibrationPattern.fromName(vibrationPatternName)
     var showVibrationPatternDialog by remember { mutableStateOf(false) }
     val isPremium by viewModel.isPremium.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -225,76 +227,42 @@ fun SettingsScreen(
             
             item {
                 SettingsCard {
-                    SettingClickableItem(
-                        icon = Icons.Default.Warning,
-                        title = "Alarm reliability",
-                        onClick = onNavigateToAlarmReliability
-                    )
+                    Column {
+                        SettingClickableItem(
+                            icon = Icons.Default.Warning,
+                            title = "Alarm reliability",
+                            onClick = onNavigateToAlarmReliability
+                        )
+                    }
                 }
             }
 
-            // About Section
+            // Support Section
             item {
-                SectionHeader(title = "About")
+                SectionHeader(title = "Support")
             }
             
             item {
                 SettingsCard {
-                    SettingClickableItem(
-                        icon = Icons.Default.Info,
-                        title = "About Loud Alarm",
-                        subtitle = if (showDevOptions) "Developer mode enabled" else "Version 1.0.0",
-                        onClick = {
-                            if (!showDevOptions) {
-                                devTapCount++
-                                if (devTapCount >= 5) {
-                                    showDevOptions = true
+                    Column {
+                        SettingClickableItem(
+                            icon = Icons.Default.Email,
+                            title = "Send Feedback",
+                            subtitle = "Report issues or suggest features",
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:")
+                                    putExtra(Intent.EXTRA_EMAIL, arrayOf("rylpix.app@gmail.com"))
+                                    putExtra(Intent.EXTRA_SUBJECT, "Loud Alarm Feedback")
                                 }
-                            } else {
-                                showAboutDialog = true
+                                context.startActivity(Intent.createChooser(intent, "Send email"))
                             }
-                        }
-                    )
-                }
-            }
-            
-            if (showDevOptions) {
-                item {
-                    SectionHeader(title = "Developer Options")
-                }
-                
-                item {
-                    val isPremiumPurchased by viewModel.isPremium.collectAsState()
-                    val nextAlarm by viewModel.nextAlarm.collectAsState()
-                    val context = androidx.compose.ui.platform.LocalContext.current
-                    SettingsCard {
-                        Column {
-                            SettingToggleItem(
-                                icon = Icons.Default.Warning,
-                                title = "Mock Premium Purchase",
-                                subtitle = "Enable premium mode for testing",
-                                checked = isPremiumPurchased,
-                                onCheckedChange = { viewModel.setDebugPremium(it) }
-                            )
-                            SettingDivider()
-                            SettingClickableItem(
-                                icon = Icons.Default.Notifications,
-                                title = "Test Upcoming Alarm",
-                                subtitle = if (nextAlarm != null) "Trigger next scheduled alarm immediately" else "No upcoming alarm",
-                                onClick = {
-                                    nextAlarm?.let { alarm ->
-                                        val intent = android.content.Intent(context, com.loud.alarm.service.AlarmReceiver::class.java).apply {
-                                            putExtra("ALARM_ID", alarm.id)
-                                            putExtra("IS_VOLUME_BOOST_ENABLED", alarm.isVolumeBoostEnabled)
-                                        }
-                                        context.sendBroadcast(intent)
-                                    }
-                                }
-                            )
-                        }
+                        )
                     }
                 }
             }
+
+
             
             // Bottom spacing
             item {
@@ -312,53 +280,22 @@ fun SettingsScreen(
                     Icons.Default.Warning,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.error
+                    tint = MaterialTheme.colorScheme.primary
                 )
             },
             title = {
                 Text(
-                    "Are you sure?",
+                    "Disable fade-in?",
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
+                    color = Color.White
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        "Disabling fade-in means your alarm will blast at full volume instantly. This may harm your health:",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("Cardiovascular Stress: ")
-                            }
-                            append("A sudden loud alarm triggers a sharp spike in heart rate and blood pressure, putting extra strain on your heart — especially dangerous over time.")
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("Hearing Damage: ")
-                            }
-                            append("Repeated exposure to sudden loud sounds may cause hearning damage or tinnitus.")
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append("Sleep Inertia: ")
-                            }
-                            append("Abrupt awakening worsens grogginess, making you feel more tired and less alert throughout the day.")
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+                Text(
+                    "This will start the alarm at full volume immediately. This may cause harm.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
             },
             confirmButton = {
                 TextButton(
@@ -381,39 +318,6 @@ fun SettingsScreen(
         )
     }
 
-    // About Dialog
-    if (showAboutDialog) {
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            icon = {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = Color.White
-                )
-            },
-            title = { Text("About Loud Alarm") },
-            text = {
-                Column {
-                    Text("Version: 1.0.0")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Loud Alarm - Solve2Wake is designed to help you wake up with challenging tasks.")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Features:", fontWeight = FontWeight.Bold)
-                    Text("• Math challenges")
-                    Text("• QR code scanning")
-                    Text("• Customizable alarms")
-                    Text("• Beautiful UI")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) {
-                    Text("OK")
-                }
-            }
-        )
-    }
 
     // Vibration Pattern Selection Dialog
     if (showVibrationPatternDialog) {

@@ -7,7 +7,7 @@ import androidx.room.TypeConverters
 import java.util.Locale
 
 enum class ChallengeType {
-    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT
+    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT, SQUAT, PUSH_UP, REVERSE_TYPING, AUDIO_MEMORY
 }
 
 enum class MathDifficulty {
@@ -34,7 +34,12 @@ data class Alarm(
     val stepCount: Int = 30,
     val shakeCount: Int = 30,
     val sinkImageUri: String? = null,       // Reference image URI for scan sink challenge
-    val scanObjectLabel: String = ""         // Selected object label for scan object challenge
+    val scanObjectLabel: String = "",        // Selected object label for scan object challenge ("RANDOM" for random mode)
+    val scanObjectExcluded: Set<String> = emptySet(),  // Objects excluded from random selection
+    val puzzleDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val squatCount: Int = 15,
+    val pushUpCount: Int = 15,
+    val reverseTypingCount: Int = 3
 )
 
 class AlarmTypeConverters {
@@ -88,5 +93,16 @@ class AlarmTypeConverters {
             "EXTREME", "VERY_HARD", "INSANE" -> MathDifficulty.EXTREME
             else -> MathDifficulty.EASY
         }
+    }
+
+    @TypeConverter
+    fun fromStringSet(set: Set<String>): String {
+        return set.joinToString("|")
+    }
+
+    @TypeConverter
+    fun toStringSet(value: String): Set<String> {
+        if (value.isBlank()) return emptySet()
+        return value.split("|").filter { it.isNotBlank() }.toSet()
     }
 }

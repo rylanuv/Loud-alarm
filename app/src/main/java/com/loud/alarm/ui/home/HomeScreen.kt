@@ -62,6 +62,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import com.loud.alarm.service.AlarmReceiver
+import com.loud.alarm.service.AlarmService
 import com.loud.alarm.R
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.ChallengeType
@@ -82,6 +86,15 @@ fun HomeScreen(
     val nextAlarm by viewModel.nextAlarm.collectAsState()
     val timeUntilNext by viewModel.timeUntilNextAlarmValues.collectAsState()
     val permissionsStatus = rememberRequiredPermissionsStatus()
+
+    // In-App Review: check eligibility when HomeScreen is composed
+    // (user may have just returned from dismissing an alarm)
+    val activity = androidx.activity.compose.LocalActivity.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (activity != null && viewModel.shouldRequestReview()) {
+            viewModel.requestReview(activity)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -277,6 +290,19 @@ fun NextAlarmCard(nextAlarm: Alarm?, timeUntil: String) {
                 .clip(RoundedCornerShape(24.dp))
         ) {
             // Content
+            val context = LocalContext.current
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(64.dp)
+                    .clickable {
+                        val intent = Intent(context, AlarmReceiver::class.java).apply {
+                            putExtra(AlarmService.EXTRA_ALARM_ID, nextAlarm.id)
+                            putExtra(AlarmService.EXTRA_IS_VOLUME_BOOST_ENABLED, nextAlarm.isVolumeBoostEnabled)
+                        }
+                        context.sendBroadcast(intent)
+                    }
+            )
             Column(
                 modifier = Modifier
                     .padding(24.dp)
@@ -465,6 +491,10 @@ fun AlarmItemContent(
                                 ChallengeType.PUZZLE -> "Puzzle"
                                 ChallengeType.SCAN_SINK -> "Scan Sink"
                                 ChallengeType.SCAN_OBJECT -> "Scan Object"
+                                ChallengeType.SQUAT -> "Squat"
+                                ChallengeType.PUSH_UP -> "Push Up"
+                                ChallengeType.REVERSE_TYPING -> "Reverse Typing"
+                                ChallengeType.AUDIO_MEMORY -> "Audio Memory"
                                 else -> type.name
                             }
                         }

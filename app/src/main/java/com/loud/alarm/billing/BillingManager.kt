@@ -142,7 +142,7 @@ class BillingManager @Inject constructor(
 
         billingClient?.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                val productDetailsList = queryProductDetailsResult.productDetailsList ?: emptyList()
+                val productDetailsList = queryProductDetailsResult.productDetailsList
                 for (details in productDetailsList) {
                     when (details.productId) {
                         PRODUCT_ID_QR_CODE -> {
@@ -186,7 +186,7 @@ class BillingManager @Inject constructor(
 
         billingClient?.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                val productDetailsList = queryProductDetailsResult.productDetailsList ?: emptyList()
+                val productDetailsList = queryProductDetailsResult.productDetailsList
                 for (details in productDetailsList) {
                     when (details.productId) {
                         PRODUCT_ID_MONTHLY -> {
@@ -225,7 +225,8 @@ class BillingManager @Inject constructor(
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 val qrPurchased = purchaseList.any { purchase ->
                     purchase.products.contains(PRODUCT_ID_QR_CODE) &&
-                    purchase.purchaseState == Purchase.PurchaseState.PURCHASED
+                    purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                    isValidPurchase(purchase)
                 }
                 _isQrCodePurchased.value = qrPurchased
                 Log.d(TAG, "QR Code purchased: $qrPurchased")
@@ -233,7 +234,8 @@ class BillingManager @Inject constructor(
                 // Check for lifetime purchase
                 val lifetimePurchased = purchaseList.any { purchase ->
                     purchase.products.contains(PRODUCT_ID_LIFETIME) &&
-                    purchase.purchaseState == Purchase.PurchaseState.PURCHASED
+                    purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                    isValidPurchase(purchase)
                 }
                 if (lifetimePurchased) {
                     _isSubscribed.value = true
@@ -243,7 +245,8 @@ class BillingManager @Inject constructor(
 
                 // Acknowledge any unacknowledged purchases
                 purchaseList.forEach { purchase ->
-                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && !purchase.isAcknowledged) {
+                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && 
+                        !purchase.isAcknowledged && isValidPurchase(purchase)) {
                         acknowledgePurchase(purchase)
                     }
                 }
@@ -259,7 +262,7 @@ class BillingManager @Inject constructor(
         ) { billingResult, purchaseList ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 for (purchase in purchaseList) {
-                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && isValidPurchase(purchase)) {
                         when {
                             purchase.products.contains(PRODUCT_ID_MONTHLY) -> {
                                 _isSubscribed.value = true
@@ -347,7 +350,7 @@ class BillingManager @Inject constructor(
         when (billingResult.responseCode) {
             BillingClient.BillingResponseCode.OK -> {
                 purchases?.forEach { purchase ->
-                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && isValidPurchase(purchase)) {
                         // Check QR code purchase
                         if (purchase.products.contains(PRODUCT_ID_QR_CODE)) {
                             _isQrCodePurchased.value = true
@@ -395,17 +398,19 @@ class BillingManager @Inject constructor(
         queryExistingSubscriptions()
     }
 
-    fun setDebugPremium(enabled: Boolean) {
-        if (enabled) {
-            _isQrCodePurchased.value = true
-            _isSubscribed.value = true
-        } else {
-            _isSubscribed.value = false
-            _activePlan.value = null
-            queryExistingPurchases()
-            queryExistingSubscriptions()
+    private fun isValidPurchase(purchase: Purchase): Boolean {
+        if (Security.BASE_64_ENCODED_PUBLIC_KEY == "PLACEHOLDER_BASE64_PUBLIC_KEY") {
+            Log.w(TAG, "Using placeholder public key. Ignoring signature verification for testing.")
+            return true
         }
+        return Security.verifyPurchase(
+            Security.BASE_64_ENCODED_PUBLIC_KEY,
+            purchase.originalJson,
+            purchase.signature
+        )
     }
+
+
 
     fun setSubscribed(subscribed: Boolean) {
         _isSubscribed.value = subscribed

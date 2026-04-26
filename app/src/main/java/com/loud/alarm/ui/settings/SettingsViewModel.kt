@@ -99,9 +99,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
     
-    fun setDebugPremium(enabled: Boolean) {
-        billingManager.setDebugPremium(enabled)
-    }
+
 
     fun setVibrationPattern(patternName: String) {
         viewModelScope.launch {
@@ -109,42 +107,5 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    val nextAlarm: StateFlow<Alarm?> = alarmRepository.allAlarms.map { alarmList ->
-        alarmList.filter { it.enabled }.minByOrNull { calculateTimeUntilNext(it) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private fun calculateTimeUntilNext(alarm: Alarm): Long {
-        val now = java.time.LocalDateTime.now()
-        var alarmTime = now.withHour(alarm.hour).withMinute(alarm.minute).withSecond(0).withNano(0)
-
-        if (alarm.daysOfWeek.isEmpty()) {
-            // Single shot
-            if (alarmTime.isBefore(now) || alarmTime.isEqual(now)) {
-                alarmTime = alarmTime.plusDays(1)
-            }
-        } else {
-             // Repeating
-             var currentCandidate = now.withHour(alarm.hour).withMinute(alarm.minute).withSecond(0).withNano(0)
-             if (currentCandidate.isBefore(now) || currentCandidate.isEqual(now)) {
-                 currentCandidate = currentCandidate.plusDays(1)
-             }
-             
-             for (i in 0..7) {
-                 val dayOfWeek = javaDayToCalendarDay(currentCandidate.dayOfWeek.value)
-                 if (alarm.daysOfWeek.contains(dayOfWeek)) {
-                     return java.time.Duration.between(now, currentCandidate).toMillis()
-                 }
-                 currentCandidate = currentCandidate.plusDays(1)
-             }
-        }
-        
-        if (alarmTime.isBefore(now)) {
-             alarmTime = alarmTime.plusDays(1)
-        }
-        return java.time.Duration.between(now, alarmTime).toMillis()
-    }
-
-    private fun javaDayToCalendarDay(javaDay: Int): Int {
-        return if (javaDay == 7) 1 else javaDay + 1
-    }
 }

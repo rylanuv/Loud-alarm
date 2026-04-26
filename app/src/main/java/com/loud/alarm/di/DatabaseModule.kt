@@ -141,6 +141,32 @@ object DatabaseModule {
                 db.execSQL("ALTER TABLE alarms ADD COLUMN shakeCount INTEGER NOT NULL DEFAULT 30")
             }
         }
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE alarms ADD COLUMN scanObjectExcluded TEXT NOT NULL DEFAULT ''")
+                } catch (e: Exception) {
+                    // Column might already exist if device was on an intermediate build
+                    android.util.Log.e("DatabaseModule", "Migration 11->12 column add error (likely duplicates)", e)
+                }
+            }
+        }
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN puzzleDifficulty TEXT NOT NULL DEFAULT 'EASY'")
+            }
+        }
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN squatCount INTEGER NOT NULL DEFAULT 15")
+                db.execSQL("ALTER TABLE alarms ADD COLUMN pushUpCount INTEGER NOT NULL DEFAULT 15")
+            }
+        }
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN reverseTypingCount INTEGER NOT NULL DEFAULT 3")
+            }
+        }
         return Room.databaseBuilder(
             context,
             AlarmDatabase::class.java,
@@ -156,7 +182,11 @@ object DatabaseModule {
             MIGRATION_7_8,
             MIGRATION_8_9,
             MIGRATION_9_10,
-            MIGRATION_10_11
+            MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13,
+            MIGRATION_13_14,
+            MIGRATION_14_15
         )
         .build()
     }

@@ -29,8 +29,7 @@ import com.loud.alarm.ui.alarm.AlarmActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
-import kotlin.math.log10
-import kotlin.math.roundToInt
+
 
 @AndroidEntryPoint
 class AlarmService : Service() {
@@ -45,6 +44,8 @@ class AlarmService : Service() {
     private var currentVolumeBoostEnabled: Boolean = false
     private var stopRequested: Boolean = false
     private var restartScheduled: Boolean = false
+    @Volatile
+    private var lastActivityLaunchTimeMs: Long = 0L
 
     private data class RingingContext(
         val alarmId: Int,
@@ -63,13 +64,42 @@ class AlarmService : Service() {
         private const val STATE_PREFS = "alarm_service_state"
         private const val PREF_LAST_ALARM_ID = "last_alarm_id"
         private const val PREF_LAST_VOLUME_BOOST = "last_volume_boost"
-        private const val BOOST_MULTIPLIER = 1.50f
-        private const val MAX_LOUDNESS_ENHANCER_GAIN_MB = 10_000
+        private const val BOOST_TARGET_GAIN_MB = 1500 // 15 dB — clearly audible boost
         private const val RESTART_DELAY_MS = 1_000L
         private const val HOME_RESHOW_DELAY_MS = 450L
         private const val VOLUME_ENFORCER_INTERVAL_MS = 750L
-        private const val ACTIVITY_WATCHDOG_INTERVAL_MS = 1_500L
+        private const val ACTIVITY_WATCHDOG_INTERVAL_MS = 5_000L
+        private const val LAUNCH_COOLDOWN_MS = 4_000L
+
+        /** Reference to active instance so challenges can dim/restore alarm volume */
+        @Volatile
+        private var activeInstance: AlarmService? = null
+
+        /** Dim the alarm ringtone so TTS can be heard */
+        fun dimAlarmVolume() {
+            activeInstance?.let { svc ->
+                svc.isVolumeDimmed = true
+                svc.mediaPlayer?.setVolume(0.05f, 0.05f)
+                svc.loudnessEnhancer?.enabled = false
+                Log.d(TAG, "Alarm volume dimmed for TTS")
+            }
+        }
+
+        /** Restore the alarm ringtone to full volume */
+        fun restoreAlarmVolume() {
+            activeInstance?.let { svc ->
+                svc.isVolumeDimmed = false
+                svc.mediaPlayer?.setVolume(1f, 1f)
+                if (svc.currentVolumeBoostEnabled) {
+                    svc.loudnessEnhancer?.enabled = true
+                }
+                Log.d(TAG, "Alarm volume restored after TTS")
+            }
+        }
     }
+
+    /** When true, the volume enforcer skips re-cranking volume */
+    private var isVolumeDimmed = false
 
     private val autoSilenceRunnable = Runnable {
         Log.w(TAG, "Auto-silencing alarm after timeout: user never dismissed")
@@ -81,7 +111,20 @@ class AlarmService : Service() {
     private val volumeEnforcerRunnable = object : Runnable {
         override fun run() {
             if (stopRequested) return
+            // Skip enforcing volume while alarm is dimmed for TTS
+            if (isVolumeDimmed) {
+                timeoutHandler.postDelayed(this, VOLUME_ENFORCER_INTERVAL_MS)
+                return
+            }
             enforceAlarmVolume(currentVolumeBoostEnabled)
+            if (currentVolumeBoostEnabled) {
+                loudnessEnhancer?.let {
+                    if (!it.enabled) {
+                        Log.w(TAG, "Re-enabling LoudnessEnhancer (was disabled by system)")
+                        it.enabled = true
+                    }
+                }
+            }
             timeoutHandler.postDelayed(this, VOLUME_ENFORCER_INTERVAL_MS)
         }
     }
@@ -90,8 +133,10 @@ class AlarmService : Service() {
         override fun run() {
             if (stopRequested || currentAlarmId == -1) return
 
-            if (!isAlarmActivityVisible()) {
-                Log.w(TAG, "AlarmActivity not visible; relaunching")
+            val now = System.currentTimeMillis()
+            val elapsed = now - lastActivityLaunchTimeMs
+            if (!isAlarmActivityVisible() && elapsed >= LAUNCH_COOLDOWN_MS) {
+                Log.w(TAG, "AlarmActivity not visible after ${elapsed}ms; relaunching")
                 launchAlarmActivity(currentAlarmId)
             }
 
@@ -148,6 +193,7 @@ class AlarmService : Service() {
         currentAlarmId = ringingContext.alarmId
         currentVolumeBoostEnabled = ringingContext.isVolumeBoostEnabled
         stopRequested = false
+        activeInstance = this
         restartScheduled = false
         Log.d(TAG, "AlarmService started for alarm: ${ringingContext.alarmId}")
 
@@ -392,7 +438,10 @@ class AlarmService : Service() {
                 start()
 
                 if (isVolumeBoostEnabled) {
-                    applyVolumeBoost(this, BOOST_MULTIPLIER)
+                    val boostApplied = applyVolumeBoost(this)
+                    if (!boostApplied) {
+                        Log.e(TAG, "Volume boost could not be applied — LoudnessEnhancer unavailable")
+                    }
                 }
 
                 if (isFadeInEnabled) {
@@ -446,41 +495,35 @@ class AlarmService : Service() {
         scheduleAutoSilence(autoSilenceDuration)
     }
 
-    private fun applyVolumeBoost(player: MediaPlayer, multiplier: Float): Boolean {
-        if (multiplier <= 1f) return false
-
+    private fun applyVolumeBoost(player: MediaPlayer): Boolean {
         val audioSessionId = player.audioSessionId
         if (audioSessionId <= 0) {
             Log.w(TAG, "Skipping volume boost: invalid audio session id=$audioSessionId")
             return false
         }
 
-        val targetGainMb = (20.0 * log10(multiplier.toDouble()) * 100.0)
-            .roundToInt()
-            .coerceIn(0, MAX_LOUDNESS_ENHANCER_GAIN_MB)
-
         try {
             loudnessEnhancer?.release()
             loudnessEnhancer = android.media.audiofx.LoudnessEnhancer(audioSessionId).apply {
-                setTargetGain(targetGainMb)
+                setTargetGain(BOOST_TARGET_GAIN_MB)
                 enabled = true
             }
-            Log.d(TAG, "Volume boost applied: ${multiplier}x ($targetGainMb mB)")
+            Log.d(TAG, "Volume boost applied: ${BOOST_TARGET_GAIN_MB} mB gain (session=$audioSessionId)")
             return true
         } catch (e: Exception) {
-            Log.e(TAG, "Session boost failed, retrying global mix boost ($targetGainMb mB)", e)
+            Log.e(TAG, "Session boost failed (session=$audioSessionId), retrying global mix", e)
         }
 
         return try {
             loudnessEnhancer?.release()
             loudnessEnhancer = android.media.audiofx.LoudnessEnhancer(0).apply {
-                setTargetGain(targetGainMb)
+                setTargetGain(BOOST_TARGET_GAIN_MB)
                 enabled = true
             }
-            Log.d(TAG, "Global mix boost applied: ${multiplier}x ($targetGainMb mB)")
+            Log.d(TAG, "Global mix boost applied: ${BOOST_TARGET_GAIN_MB} mB gain")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to force volume boost ($targetGainMb mB)", e)
+            Log.e(TAG, "All volume boost methods failed (${BOOST_TARGET_GAIN_MB} mB)", e)
             false
         }
     }
@@ -525,6 +568,11 @@ class AlarmService : Service() {
 
     private fun launchAlarmActivity(alarmId: Int) {
         if (alarmId == -1) return
+        if (isAlarmActivityVisible()) {
+            Log.d(TAG, "AlarmActivity already visible; skipping launch")
+            return
+        }
+        lastActivityLaunchTimeMs = System.currentTimeMillis()
 
         val activityIntent = Intent(this, AlarmActivity::class.java).apply {
             putExtra(EXTRA_ALARM_ID, alarmId)
@@ -613,6 +661,7 @@ class AlarmService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        activeInstance = null
         Log.d(TAG, "AlarmService onDestroy: cleaning up resources")
         timeoutHandler.removeCallbacksAndMessages(null)
         loudnessEnhancer?.release()

@@ -1,12 +1,10 @@
 package com.loud.alarm.service
 
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.loud.alarm.data.AlarmRepository
-import com.loud.alarm.ui.alarm.AlarmActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,47 +50,9 @@ class AlarmReceiver : BroadcastReceiver() {
             Log.e(TAG, "Failed to start AlarmService", e)
         }
 
-        // 2. ALSO launch AlarmActivity directly from the receiver
-        //    BroadcastReceivers triggered by setAlarmClock have special permission
-        //    to start activities from the background
-        try {
-            val activityIntent = Intent(context, AlarmActivity::class.java).apply {
-                putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-                            or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                )
-            }
-            val launchPendingIntent = PendingIntent.getActivity(
-                context,
-                alarmId + 10_000,
-                activityIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            launchPendingIntent.send()
-            Log.d(TAG, "AlarmActivity launched directly from receiver via PendingIntent")
-        } catch (e: PendingIntent.CanceledException) {
-            Log.e(TAG, "PendingIntent canceled while launching AlarmActivity; falling back", e)
-            try {
-                val fallbackIntent = Intent(context, AlarmActivity::class.java).apply {
-                    putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
-                    addFlags(
-                        Intent.FLAG_ACTIVITY_NEW_TASK
-                                or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                    )
-                }
-                context.startActivity(fallbackIntent)
-                Log.d(TAG, "AlarmActivity fallback startActivity launch succeeded")
-            } catch (fallbackError: Exception) {
-                Log.e(TAG, "Fallback startActivity launch also failed", fallbackError)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch activity from receiver, relying on service", e)
-        }
+        // 2. Activity launch is handled by AlarmService.onStartCommand — no need to
+        //    duplicate it here.  The service's watchdog will also relaunch the screen
+        //    if it doesn't appear within a few seconds.
 
         // 3. Reschedule if repeating, or disable if one-shot
         val pendingResult = goAsync()

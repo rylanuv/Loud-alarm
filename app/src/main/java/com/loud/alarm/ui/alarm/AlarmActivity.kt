@@ -13,6 +13,8 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -74,16 +76,26 @@ import com.loud.alarm.ui.challenge.PuzzleChallengeScreen
 import com.loud.alarm.ui.challenge.ScanChallengeScreen
 import com.loud.alarm.ui.challenge.ShakeChallengeScreen
 import com.loud.alarm.ui.challenge.SpellBeeChallengeScreen
+import com.loud.alarm.ui.challenge.SquatChallengeScreen
+import com.loud.alarm.ui.challenge.PushUpChallengeScreen
+import com.loud.alarm.ui.challenge.ReverseTypingChallengeScreen
+import com.loud.alarm.ui.challenge.AudioMemoryChallengeScreen
+import com.loud.alarm.ui.challenge.RandomObjectPickerScreen
 import com.loud.alarm.ui.home.formatTime
 import com.loud.alarm.ui.home.getAmPm
 import com.loud.alarm.ui.theme.LoudAlarmTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class AlarmActivity : ComponentActivity() {
 
     private val viewModel: AlarmActiveViewModel by viewModels()
     private var alarmFlowCompleted: Boolean = false
+
+    @Inject
+    lateinit var settingsRepository: com.loud.alarm.data.SettingsRepository
 
     companion object {
         private const val TAG = "AlarmActivity"
@@ -95,6 +107,7 @@ class AlarmActivity : ComponentActivity() {
         // showOnLockScreen uses window flags, safe before super
         showOnLockScreen()
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         
         val alarmId = intent.getIntExtra(AlarmService.EXTRA_ALARM_ID, -1)
         Log.d(TAG, "AlarmActivity onCreate, alarmId=$alarmId")
@@ -120,6 +133,9 @@ class AlarmActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onDismissActivity = {
                                 alarmFlowCompleted = true
+                                lifecycleScope.launch {
+                                    settingsRepository.incrementAlarmDismissCount()
+                                }
                                 if (alarmState!!.wakeUpCheckMinutes > 0) {
                                     scheduleWakeUpCheck(alarmState!!)
                                 }
@@ -271,14 +287,7 @@ class AlarmActivity : ComponentActivity() {
         }
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        return when (event.keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP,
-            KeyEvent.KEYCODE_VOLUME_DOWN,
-            KeyEvent.KEYCODE_VOLUME_MUTE -> true
-            else -> super.dispatchKeyEvent(event)
-        }
-    }
+
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
@@ -334,7 +343,9 @@ fun ActiveAlarmScreen(
     key(alarm.id) {
         var mathSolved by rememberSaveable { mutableStateOf(false) }
         var barcodeScanned by rememberSaveable { mutableStateOf(false) }
-        var useMathFallback by remember { mutableStateOf(false) }
+        var useMathFallback by rememberSaveable { mutableStateOf(false) }
+        var useScanSinkMathFallback by rememberSaveable { mutableStateOf(false) }
+        var useScanObjectMathFallback by rememberSaveable { mutableStateOf(false) }
         var rewriteSolved by remember { mutableStateOf(false) }
         var stepSolved by rememberSaveable { mutableStateOf(false) }
         var mazeSolved by remember { mutableStateOf(false) }
@@ -344,9 +355,14 @@ fun ActiveAlarmScreen(
         var scanObjectSolved by remember { mutableStateOf(false) }
         var spellBeeSolved by rememberSaveable { mutableStateOf(false) }
         var puzzleSolved by rememberSaveable { mutableStateOf(false) }
+        var squatSolved by rememberSaveable { mutableStateOf(false) }
+        var pushUpSolved by rememberSaveable { mutableStateOf(false) }
+        var reverseTypingSolved by rememberSaveable { mutableStateOf(false) }
+        var audioMemorySolved by rememberSaveable { mutableStateOf(false) }
         
         var isRingingScreenDismissed by rememberSaveable { mutableStateOf(false) }
         var pendingSnoozeMinutes by rememberSaveable { mutableStateOf<Int?>(null) }
+        var showCongrats by rememberSaveable { mutableStateOf(false) }
 
         // Build the ordered list of challenges the user must complete
         val activeChallenges = remember(alarm.challengeTypes) {
@@ -367,6 +383,10 @@ fun ActiveAlarmScreen(
                 ChallengeType.SCAN_OBJECT -> scanObjectSolved
                 ChallengeType.SPELL_BEE -> spellBeeSolved
                 ChallengeType.PUZZLE -> puzzleSolved
+                ChallengeType.SQUAT -> squatSolved
+                ChallengeType.PUSH_UP -> pushUpSolved
+                ChallengeType.REVERSE_TYPING -> reverseTypingSolved
+                ChallengeType.AUDIO_MEMORY -> audioMemorySolved
                 ChallengeType.NONE -> true
             }
         }
@@ -385,6 +405,10 @@ fun ActiveAlarmScreen(
                 ChallengeType.SCAN_OBJECT -> !scanObjectSolved
                 ChallengeType.SPELL_BEE -> !spellBeeSolved
                 ChallengeType.PUZZLE -> !puzzleSolved
+                ChallengeType.SQUAT -> !squatSolved
+                ChallengeType.PUSH_UP -> !pushUpSolved
+                ChallengeType.REVERSE_TYPING -> !reverseTypingSolved
+                ChallengeType.AUDIO_MEMORY -> !audioMemorySolved
                 ChallengeType.NONE -> false
             }
         }
@@ -393,14 +417,24 @@ fun ActiveAlarmScreen(
 
         LaunchedEffect(isRingingScreenDismissed, isChallengeComplete) {
             if (isRingingScreenDismissed && isChallengeComplete) {
-                pendingSnoozeMinutes?.let { minutes ->
-                    viewModel.snoozeAlarm(alarm, minutes)
+                if (pendingSnoozeMinutes != null) {
+                    viewModel.snoozeAlarm(alarm, pendingSnoozeMinutes!!)
+                    onDismissActivity()
+                } else if (activeChallenges.isNotEmpty()) {
+                    showCongrats = true
+                } else {
+                    onDismissActivity()
                 }
-                onDismissActivity()
             }
         }
 
-        if (!isRingingScreenDismissed) {
+        if (showCongrats) {
+            CongratsScreen(
+                onAnimationFinished = {
+                    onDismissActivity()
+                }
+            )
+        } else if (!isRingingScreenDismissed) {
             Log.d("ActiveAlarmScreen", "Showing DismissOrSnoozeScreen")
             // Show Dismiss / Snooze Options
             DismissOrSnoozeScreen(
@@ -512,40 +546,116 @@ fun ActiveAlarmScreen(
                         }
                         ChallengeType.PUZZLE -> {
                             PuzzleChallengeScreen(
+                                difficulty = alarm.puzzleDifficulty,
                                 onSuccess = { puzzleSolved = true }
                             )
                         }
                         ChallengeType.SCAN_SINK -> {
-                            Log.d("ActiveAlarmScreen", "Rendering ScanChallengeScreen for SINK")
-                            ScanChallengeScreen(
-                                targetLabel = "Sink",
-                                displayTitle = "Scan Your Sink",
-                                displaySubtitle = "Point the camera at your sink to dismiss",
-                                onSuccess = {
-                                    Log.d("ActiveAlarmScreen", "Scan Sink challenge SOLVED!")
-                                    scanSinkSolved = true
-                                },
-                                onFallbackToMath = {
-                                    Log.d("ActiveAlarmScreen", "User chose math fallback for scan sink")
-                                    scanSinkSolved = true  // fallback skips
-                                }
-                            )
+                            if (useScanSinkMathFallback) {
+                                Log.d("ActiveAlarmScreen", "Rendering MathChallengeScreen (scan sink fallback)")
+                                MathChallengeScreen(
+                                    difficulty = MathDifficulty.MEDIUM,
+                                    onSuccess = {
+                                        Log.d("ActiveAlarmScreen", "Scan sink math fallback SOLVED!")
+                                        scanSinkSolved = true
+                                    }
+                                )
+                            } else {
+                                Log.d("ActiveAlarmScreen", "Rendering ScanChallengeScreen for SINK")
+                                ScanChallengeScreen(
+                                    targetLabel = "Sink",
+                                    displayTitle = "Scan Your Sink",
+                                    displaySubtitle = "Point the camera at your sink to dismiss",
+                                    onSuccess = {
+                                        Log.d("ActiveAlarmScreen", "Scan Sink challenge SOLVED!")
+                                        scanSinkSolved = true
+                                    },
+                                    onFallbackToMath = {
+                                        Log.d("ActiveAlarmScreen", "User chose math fallback for scan sink")
+                                        useScanSinkMathFallback = true
+                                    }
+                                )
+                            }
                         }
                         ChallengeType.SCAN_OBJECT -> {
-                            val objectLabel = alarm.scanObjectLabel.ifEmpty { "Object" }
-                            Log.d("ActiveAlarmScreen", "Rendering ScanChallengeScreen for OBJECT: $objectLabel")
-                            ScanChallengeScreen(
-                                targetLabel = objectLabel,
-                                displayTitle = "Find the $objectLabel",
-                                displaySubtitle = "Point the camera at a $objectLabel to dismiss",
-                                onSuccess = {
-                                    Log.d("ActiveAlarmScreen", "Scan Object challenge SOLVED! ($objectLabel)")
-                                    scanObjectSolved = true
-                                },
-                                onFallbackToMath = {
-                                    Log.d("ActiveAlarmScreen", "User chose math fallback for scan object")
-                                    scanObjectSolved = true  // fallback skips
+                            if (useScanObjectMathFallback) {
+                                Log.d("ActiveAlarmScreen", "Rendering MathChallengeScreen (scan object fallback)")
+                                MathChallengeScreen(
+                                    difficulty = MathDifficulty.MEDIUM,
+                                    onSuccess = {
+                                        Log.d("ActiveAlarmScreen", "Scan object math fallback SOLVED!")
+                                        scanObjectSolved = true
+                                    }
+                                )
+                            } else {
+                            val isRandomMode = alarm.scanObjectLabel == "RANDOM"
+                            if (isRandomMode) {
+                                // Random mode: show roulette, then scan
+                                var randomPickedLabel by remember { mutableStateOf<String?>(null) }
+                                if (randomPickedLabel == null) {
+                                    RandomObjectPickerScreen(
+                                        excludedLabels = alarm.scanObjectExcluded,
+                                        onObjectPicked = { picked ->
+                                            Log.d("ActiveAlarmScreen", "Random picker chose: $picked")
+                                            randomPickedLabel = picked
+                                        }
+                                    )
+                                } else {
+                                    val label = randomPickedLabel!!
+                                    ScanChallengeScreen(
+                                        targetLabel = label,
+                                        displayTitle = "Find the $label",
+                                        displaySubtitle = "Point the camera at a $label to dismiss",
+                                        onSuccess = {
+                                            Log.d("ActiveAlarmScreen", "Scan Object SOLVED! (random: $label)")
+                                            scanObjectSolved = true
+                                        },
+                                        onFallbackToMath = {
+                                            Log.d("ActiveAlarmScreen", "Math fallback for random scan object")
+                                            useScanObjectMathFallback = true
+                                        }
+                                    )
                                 }
+                            } else {
+                                val objectLabel = alarm.scanObjectLabel.ifEmpty { "Object" }
+                                Log.d("ActiveAlarmScreen", "Rendering ScanChallengeScreen for OBJECT: $objectLabel")
+                                ScanChallengeScreen(
+                                    targetLabel = objectLabel,
+                                    displayTitle = "Find the $objectLabel",
+                                    displaySubtitle = "Point the camera at a $objectLabel to dismiss",
+                                    onSuccess = {
+                                        Log.d("ActiveAlarmScreen", "Scan Object challenge SOLVED! ($objectLabel)")
+                                        scanObjectSolved = true
+                                    },
+                                    onFallbackToMath = {
+                                        Log.d("ActiveAlarmScreen", "User chose math fallback for scan object")
+                                        useScanObjectMathFallback = true
+                                    }
+                                )
+                            }
+                            }
+                        }
+                        ChallengeType.SQUAT -> {
+                            SquatChallengeScreen(
+                                targetSquats = alarm.squatCount,
+                                onSuccess = { squatSolved = true }
+                            )
+                        }
+                        ChallengeType.PUSH_UP -> {
+                            PushUpChallengeScreen(
+                                targetPushUps = alarm.pushUpCount,
+                                onSuccess = { pushUpSolved = true }
+                            )
+                        }
+                        ChallengeType.REVERSE_TYPING -> {
+                            ReverseTypingChallengeScreen(
+                                rounds = alarm.reverseTypingCount,
+                                onSuccess = { reverseTypingSolved = true }
+                            )
+                        }
+                        ChallengeType.AUDIO_MEMORY -> {
+                            AudioMemoryChallengeScreen(
+                                onSuccess = { audioMemorySolved = true }
                             )
                         }
                         else -> {
@@ -669,7 +779,7 @@ fun DismissOrSnoozeScreen(
                 contentColor = Color.White
             )
         ) {
-            Text("START CHALLENGE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("DISMISS ALARM", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         
         if (snoozeEnabled) {

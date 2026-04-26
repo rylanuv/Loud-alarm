@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.AlarmRepository
+import com.loud.alarm.review.InAppReviewManager
 import com.loud.alarm.service.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,7 +24,8 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: AlarmRepository,
-    private val scheduler: AlarmScheduler
+    private val scheduler: AlarmScheduler,
+    private val reviewManager: InAppReviewManager
 ) : ViewModel() {
 
     val alarms: StateFlow<List<Alarm>> = repository.allAlarms
@@ -114,5 +116,20 @@ class HomeViewModel @Inject constructor(
 
     private fun javaDayToCalendarDay(javaDay: Int): Int {
         return if (javaDay == 7) 1 else javaDay + 1
+    }
+
+    /**
+     * Check if conditions are met to show the in-app review prompt.
+     * Should be called when HomeScreen resumes (user just came back from dismissing an alarm).
+     */
+    suspend fun shouldRequestReview(): Boolean {
+        return reviewManager.shouldRequestReview()
+    }
+
+    /**
+     * Launch the in-app review flow. Must be called with an Activity.
+     */
+    suspend fun requestReview(activity: android.app.Activity) {
+        reviewManager.requestReview(activity)
     }
 }

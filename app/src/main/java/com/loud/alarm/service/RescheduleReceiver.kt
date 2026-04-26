@@ -31,17 +31,27 @@ class RescheduleReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "RescheduleReceiver"
+        private val SYSTEM_ACTIONS = setOf(
+            Intent.ACTION_TIME_CHANGED,          // "android.intent.action.TIME_SET"
+            Intent.ACTION_TIMEZONE_CHANGED,     // "android.intent.action.TIMEZONE_CHANGED"
+            Intent.ACTION_LOCALE_CHANGED,       // "android.intent.action.LOCALE_CHANGED"
+            Intent.ACTION_MY_PACKAGE_REPLACED, // "android.intent.action.MY_PACKAGE_REPLACED"
+        )
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action
+        val action = intent.action ?: return
+        if (action !in SYSTEM_ACTIONS) {
+            return
+        }
+
         Log.d(TAG, "Received action: $action — rescheduling all enabled alarms")
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val alarms = repository.getEnabledAlarms()
-                Log.d(TAG, "Found ${alarms.size} enabled alarm(s) to reschedule")
+                Log.d(TAG, "Found ${alarms.size} enabled alarm(s) to reschedule due to $action")
                 alarms.forEach { alarm ->
                     try {
                         scheduler.schedule(alarm)

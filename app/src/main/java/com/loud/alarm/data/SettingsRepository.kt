@@ -33,6 +33,8 @@ class SettingsRepository @Inject constructor(
         val AUTO_SILENCE_DURATION = intPreferencesKey("auto_silence_duration")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val VIBRATION_PATTERN = stringPreferencesKey("vibration_pattern")
+        val ALARM_DISMISS_COUNT = intPreferencesKey("alarm_dismiss_count")
+        val REVIEW_SHOWN = booleanPreferencesKey("review_shown")
     }
 
     val vibrationEnabled: Flow<Boolean> = context.dataStore.data
@@ -142,6 +144,31 @@ class SettingsRepository @Inject constructor(
     suspend fun setVibrationPattern(patternName: String) {
         context.dataStore.edit { preferences: MutablePreferences ->
             preferences[PreferencesKeys.VIBRATION_PATTERN] = patternName
+        }
+    }
+
+    // --- In-App Review tracking ---
+
+    val alarmDismissCount: Flow<Int> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.ALARM_DISMISS_COUNT] ?: 0
+        }
+
+    val reviewShown: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.REVIEW_SHOWN] ?: false
+        }
+
+    suspend fun incrementAlarmDismissCount() {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            val current = preferences[PreferencesKeys.ALARM_DISMISS_COUNT] ?: 0
+            preferences[PreferencesKeys.ALARM_DISMISS_COUNT] = current + 1
+        }
+    }
+
+    suspend fun setReviewShown(shown: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.REVIEW_SHOWN] = shown
         }
     }
 }

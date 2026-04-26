@@ -38,3 +38,7 @@ val IconTeal = Color(0xFF009688)
 val IconIndigo = Color(0xFF7986CB) // Brighter indigo for dark mode
 val IconLime = Color(0xFFCDDC39)
 val IconAmber = Color(0xFFFFC107)
+val IconDeepOrange = Color(0xFFFF5722)
+val IconDeepPurple = Color(0xFF7C4DFF)
+val IconBrown = Color(0xFFBCAAA4) // Brighter brown
+val IconLightBlue = Color(0xFF40C4FF) // Brighter, more vivid light blue

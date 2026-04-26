@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,67 +29,96 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.loud.alarm.data.MathDifficulty
 import kotlin.math.abs
+import kotlin.random.Random
 
-private val MAZE_LEVELS_BY_DIFFICULTY = mapOf(
-    MathDifficulty.EASY to listOf(
-        listOf(
-            "S....",
-            "###.#",
-            "....#",
-            "#.###",
-            "....E"
-        ),
-        listOf(
-            "S....",
-            ".###.",
-            "...#.",
-            ".#...",
-            ".###E"
-        )
-    ),
-    MathDifficulty.MEDIUM to listOf(
-        listOf(
-            "S#....",
-            ".#.#.#",
-            ".#.#.#",
-            ".#...#",
-            ".###.#",
-            ".....E"
-        )
-    ),
-    MathDifficulty.HARD to listOf(
-        listOf(
-            "S.....#",
-            "#####.#",
-            "#...#.#",
-            "#.#.#.#",
-            "#.#...#",
-            "#.#####",
-            "#.....E"
-        )
-    ),
-    MathDifficulty.EXTREME to listOf(
-        listOf(
-            "S......#",
-            "######.#",
-            "#....#.#",
-            "#.##.#.#",
-            "#.##...#",
-            "#.#####.",
-            "#......#",
-            "######.E"
-        )
-    )
-)
+// --- Procedural maze generator (Randomized DFS / Recursive Backtracker) ---
+
+/**
+ * Grid size for each difficulty (rows x cols of the *cell* grid).
+ * The actual rendered grid is (2*cells+1) because walls sit between cells.
+ */
+private fun gridSizeForDifficulty(d: MathDifficulty): Pair<Int, Int> = when (d) {
+    MathDifficulty.EASY    -> 5 to 5
+    MathDifficulty.MEDIUM  -> 6 to 6
+    MathDifficulty.HARD    -> 7 to 7
+    MathDifficulty.EXTREME -> 8 to 8
+}
+
+/**
+ * Generates a guaranteed-solvable maze using randomized DFS and returns it
+ * as a list of strings (one per row) using:
+ *   'S' = start, 'E' = end, '.' = open, '#' = wall
+ *
+ * [rows] and [cols] are the *logical* cell dimensions.
+ * The returned grid is (2*rows+1) x (2*cols+1) with walls on even indices.
+ */
+private fun generateMaze(rows: Int, cols: Int, rng: Random = Random): List<String> {
+    val gridH = 2 * rows + 1
+    val gridW = 2 * cols + 1
+
+    // Initialize everything as wall
+    val grid = Array(gridH) { CharArray(gridW) { '#' } }
+
+    val visited = Array(rows) { BooleanArray(cols) }
+
+    // Directions: up, right, down, left
+    val dr = intArrayOf(-1, 0, 1, 0)
+    val dc = intArrayOf(0, 1, 0, -1)
+
+    // Iterative DFS with explicit stack (avoids StackOverflow on large grids)
+    val stack = ArrayDeque<Pair<Int, Int>>()
+    visited[0][0] = true
+    grid[1][1] = '.'
+    stack.addLast(0 to 0)
+
+    while (stack.isNotEmpty()) {
+        val (cr, cc) = stack.last()
+        // Collect unvisited neighbours
+        val neighbours = mutableListOf<Int>()
+        for (d in 0..3) {
+            val nr = cr + dr[d]
+            val nc = cc + dc[d]
+            if (nr in 0 until rows && nc in 0 until cols && !visited[nr][nc]) {
+                neighbours.add(d)
+            }
+        }
+        if (neighbours.isEmpty()) {
+            stack.removeLast()
+        } else {
+            val d = neighbours[rng.nextInt(neighbours.size)]
+            val nr = cr + dr[d]
+            val nc = cc + dc[d]
+            // Carve the wall between current and neighbour
+            val wallR = 2 * cr + 1 + dr[d]
+            val wallC = 2 * cc + 1 + dc[d]
+            grid[wallR][wallC] = '.'
+            // Mark neighbour cell as open & visited
+            grid[2 * nr + 1][2 * nc + 1] = '.'
+            visited[nr][nc] = true
+            stack.addLast(nr to nc)
+        }
+    }
+
+    // Place start & end markers
+    grid[1][1] = 'S'
+    grid[2 * rows - 1][2 * cols - 1] = 'E'
+
+    return grid.map { String(it) }
+}
+
+// -----------------------------------------------------------------------
 
 @Composable
 fun MazeChallengeScreen(
     difficulty: MathDifficulty,
     onSuccess: () -> Unit
 ) {
+    val (cellRows, cellCols) = remember(difficulty) { gridSizeForDifficulty(difficulty) }
+
     val mazeRows = remember(difficulty) {
-        (MAZE_LEVELS_BY_DIFFICULTY[difficulty] ?: MAZE_LEVELS_BY_DIFFICULTY.getValue(MathDifficulty.EASY)).random()
+        generateMaze(cellRows, cellCols)
     }
+
     val height = mazeRows.size
     val width = mazeRows.maxOfOrNull { it.length } ?: 0
 
@@ -108,7 +136,7 @@ fun MazeChallengeScreen(
             )
         )
     }
-    
+
     LaunchedEffect(Unit) {
         for (r in 0 until height) {
             for (c in mazeRows[r].indices) {
@@ -134,7 +162,7 @@ fun MazeChallengeScreen(
         // Check if adjacent
         val isAdjacent = abs(lastPos.first - r) + abs(lastPos.second - c) == 1
         if (!isAdjacent) return
-        
+
         // Prevent going into walls
         if (cellAt(r, c) == '#') {
             // Reset to start on hit wall
@@ -169,13 +197,13 @@ fun MazeChallengeScreen(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
+
         Spacer(modifier = Modifier.height(48.dp))
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
+                .aspectRatio(width.toFloat() / height.toFloat())
                 .background(Color(0xFF2C2C2E), RoundedCornerShape(16.dp))
                 .padding(8.dp)
         ) {
@@ -198,7 +226,7 @@ fun MazeChallengeScreen(
                                 isWall -> Color(0xFF4C4C4E)
                                 else -> Color(0xFF1E1E20)
                             }
-                            
+
                             val textStr = when {
                                 isStart -> "S"
                                 isEnd -> "E"
@@ -208,9 +236,9 @@ fun MazeChallengeScreen(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(4.dp)
+                                    .padding(1.dp)
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(4.dp))
                                     .background(bgColor)
                                     .clickable { onCellTap(r, c) },
                                 contentAlignment = Alignment.Center

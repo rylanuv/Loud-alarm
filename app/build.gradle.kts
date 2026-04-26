@@ -14,7 +14,7 @@ android {
         applicationId = "com.loud.alarm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
+        versionCode = 9
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -40,12 +40,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
-            freeCompilerArgs.add("-Xannotation-default-target=param-property")
-        }
-    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -54,6 +49,13 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 
@@ -99,11 +101,17 @@ dependencies {
     // ML Kit Image Labeling (thin/Play Services variant — saves ~30-35 MB vs bundled)
     implementation("com.google.android.gms:play-services-mlkit-image-labeling:16.0.8")
 
+    // ML Kit Object Detection (used by Scan Object challenge for localizing specific objects)
+    implementation("com.google.mlkit:object-detection:17.0.2")
+
     // Accompanist (Permissions)
     implementation("com.google.accompanist:accompanist-permissions:0.37.3")
 
     // Google Play Billing
     implementation("com.android.billingclient:billing-ktx:8.3.0")
+
+    // Google Play In-App Review
+    implementation("com.google.android.play:review-ktx:2.0.2")
 
 
     testImplementation("junit:junit:4.13.2")

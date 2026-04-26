@@ -28,9 +28,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.loud.alarm.data.MathDifficulty
 
-private const val PUZZLE_SIZE = 2
-private const val SCRAMBLE_MOVES = 6
+private fun puzzleConfig(difficulty: MathDifficulty): Pair<Int, Int> {
+    // Returns (gridSize, scrambleMoves)
+    return when (difficulty) {
+        MathDifficulty.EASY -> 2 to 6       // 2×2 grid (3 tiles)
+        MathDifficulty.MEDIUM -> 3 to 20    // 3×3 grid (8 tiles)
+        MathDifficulty.HARD -> 4 to 40      // 4×4 grid (15 tiles)
+        MathDifficulty.EXTREME -> 5 to 80   // 5×5 grid (24 tiles)
+    }
+}
 
 private fun solvedBoard(size: Int): List<Int> {
     return (1 until size * size).toList() + 0
@@ -47,12 +55,12 @@ private fun adjacentIndices(index: Int, size: Int): List<Int> {
     return result
 }
 
-private fun generateScrambledBoard(size: Int): List<Int> {
+private fun generateScrambledBoard(size: Int, scrambleMoves: Int): List<Int> {
     val board = solvedBoard(size).toMutableList()
     var blankIndex = board.lastIndex
     var previousBlankIndex = -1
 
-    repeat(SCRAMBLE_MOVES) {
+    repeat(scrambleMoves) {
         val options = adjacentIndices(blankIndex, size).filter { it != previousBlankIndex }
         val nextIndex = (if (options.isNotEmpty()) options else adjacentIndices(blankIndex, size)).random()
         val temp = board[nextIndex]
@@ -74,9 +82,13 @@ private fun generateScrambledBoard(size: Int): List<Int> {
 }
 
 @Composable
-fun PuzzleChallengeScreen(onSuccess: () -> Unit) {
-    val targetBoard = remember { solvedBoard(PUZZLE_SIZE) }
-    var board by rememberSaveable { mutableStateOf(generateScrambledBoard(PUZZLE_SIZE)) }
+fun PuzzleChallengeScreen(
+    difficulty: MathDifficulty = MathDifficulty.EASY,
+    onSuccess: () -> Unit
+) {
+    val (puzzleSize, scrambleMoves) = remember(difficulty) { puzzleConfig(difficulty) }
+    val targetBoard = remember(puzzleSize) { solvedBoard(puzzleSize) }
+    var board by rememberSaveable { mutableStateOf(generateScrambledBoard(puzzleSize, scrambleMoves)) }
     var moves by rememberSaveable { mutableStateOf(0) }
     val isSolved = board == targetBoard
 
@@ -86,13 +98,20 @@ fun PuzzleChallengeScreen(onSuccess: () -> Unit) {
 
     fun onTileTap(index: Int) {
         val blankIndex = board.indexOf(0)
-        if (index !in adjacentIndices(blankIndex, PUZZLE_SIZE)) return
+        if (index !in adjacentIndices(blankIndex, puzzleSize)) return
         val next = board.toMutableList()
         val temp = next[index]
         next[index] = next[blankIndex]
         next[blankIndex] = temp
         board = next
         moves += 1
+    }
+
+    // Choose font style based on grid size so numbers fit
+    val tileTextStyle = when {
+        puzzleSize <= 3 -> MaterialTheme.typography.headlineMedium
+        puzzleSize == 4 -> MaterialTheme.typography.titleLarge
+        else -> MaterialTheme.typography.titleMedium
     }
 
     Column(
@@ -110,7 +129,7 @@ fun PuzzleChallengeScreen(onSuccess: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Arrange numbers 1 to ${PUZZLE_SIZE * PUZZLE_SIZE - 1} in order",
+            text = "Arrange numbers 1 to ${puzzleSize * puzzleSize - 1} in order",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -130,22 +149,22 @@ fun PuzzleChallengeScreen(onSuccess: () -> Unit) {
                 .padding(8.dp)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                for (r in 0 until PUZZLE_SIZE) {
+                for (r in 0 until puzzleSize) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(if (puzzleSize <= 3) 8.dp else 4.dp)
                     ) {
-                        for (c in 0 until PUZZLE_SIZE) {
-                            val index = r * PUZZLE_SIZE + c
+                        for (c in 0 until puzzleSize) {
+                            val index = r * puzzleSize + c
                             val value = board[index]
                             val isBlank = value == 0
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(if (puzzleSize <= 3) 12.dp else 8.dp))
                                     .background(
                                         if (isBlank) Color(0xFF1E1E20)
                                         else MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
@@ -156,7 +175,7 @@ fun PuzzleChallengeScreen(onSuccess: () -> Unit) {
                                 if (!isBlank) {
                                     Text(
                                         text = value.toString(),
-                                        style = MaterialTheme.typography.headlineMedium,
+                                        style = tileTextStyle,
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -164,8 +183,8 @@ fun PuzzleChallengeScreen(onSuccess: () -> Unit) {
                             }
                         }
                     }
-                    if (r < PUZZLE_SIZE - 1) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                    if (r < puzzleSize - 1) {
+                        Spacer(modifier = Modifier.height(if (puzzleSize <= 3) 8.dp else 4.dp))
                     }
                 }
             }

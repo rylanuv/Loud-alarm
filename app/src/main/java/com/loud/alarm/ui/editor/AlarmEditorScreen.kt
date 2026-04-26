@@ -84,7 +84,23 @@ import androidx.compose.material.icons.filled.Chair
 import androidx.compose.material.icons.filled.DoorFront
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Mouse
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.Umbrella
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Kitchen
+import androidx.compose.material.icons.filled.Bed
+import androidx.compose.material.icons.filled.DirectionsBike
+import androidx.compose.material.icons.filled.Wc
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.unit.dp as vecDp
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -153,6 +169,59 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import java.io.File
 import java.util.concurrent.Executors
 
+/**
+ * Custom squat icon — a stick-figure person in a squatting position
+ * (bent knees, lowered body) rendered in a 24×24 viewport.
+ */
+private val SquatIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "Squat",
+        defaultWidth = 24.vecDp,
+        defaultHeight = 24.vecDp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        // Head (circle)
+        path(fill = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black)) {
+            // Circle at (12, 4) radius 2.2
+            moveTo(12f, 1.8f)
+            arcTo(2.2f, 2.2f, 0f, isMoreThanHalf = true, isPositiveArc = true, 12f, 6.2f)
+            arcTo(2.2f, 2.2f, 0f, isMoreThanHalf = true, isPositiveArc = true, 12f, 1.8f)
+            close()
+        }
+        // Body — torso leaning forward + bent legs in squat
+        path(
+            fill = null,
+            stroke = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round,
+            strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
+        ) {
+            // Torso: from neck down, leaning forward slightly
+            moveTo(12f, 6.5f)
+            lineTo(12f, 13f)
+
+            // Left leg: thigh goes out-left and down, then shin bends back
+            moveTo(12f, 13f)
+            lineTo(8.5f, 16f)
+            lineTo(7f, 20f)
+
+            // Right leg: thigh goes out-right and down, then shin bends back
+            moveTo(12f, 13f)
+            lineTo(15.5f, 16f)
+            lineTo(17f, 20f)
+
+            // Left arm: reaching forward/down (balance pose)
+            moveTo(12f, 8.5f)
+            lineTo(8f, 11f)
+
+            // Right arm: reaching forward/down
+            moveTo(12f, 8.5f)
+            lineTo(16f, 11f)
+        }
+    }.build()
+}
+
 private const val FREE_CHALLENGE_LIMIT = 2
 
 private fun resolveRingtoneTitle(context: Context, soundUri: String?): String {
@@ -185,6 +254,9 @@ fun AlarmEditorScreen(
     val isSubscribed by billingViewModel.isSubscribed.collectAsState()
     
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
+    val activityRecognitionPermissionState = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        rememberPermissionState(android.Manifest.permission.ACTIVITY_RECOGNITION)
+    } else null
     
     val ringtonePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -487,7 +559,11 @@ fun AlarmEditorScreen(
                         ChallengeType.SPELL_BEE to Triple(Icons.Default.Spellcheck, "Spell Bee", IconAmber),
                         ChallengeType.PUZZLE to Triple(Icons.Default.Extension, "Puzzle", IconIndigo),
                         ChallengeType.SCAN_SINK to Triple(Icons.Default.Wash, "Scan Sink", IconTeal),
-                        ChallengeType.SCAN_OBJECT to Triple(Icons.Default.CameraAlt, "Scan Object", IconLime)
+                        ChallengeType.SCAN_OBJECT to Triple(Icons.Default.CameraAlt, "Scan Object", IconLime),
+                        ChallengeType.SQUAT to Triple(SquatIcon, "Squat", IconDeepOrange),
+                        ChallengeType.PUSH_UP to Triple(Icons.Default.FitnessCenter, "Push Up", IconDeepPurple),
+                        ChallengeType.REVERSE_TYPING to Triple(Icons.Default.Keyboard, "Reverse Typing", IconBrown),
+                        ChallengeType.AUDIO_MEMORY to Triple(Icons.Default.Headphones, "Audio Memory", IconLightBlue)
                     )
                     val premiumChallengeTypes = setOf(
                         ChallengeType.STEP,
@@ -497,7 +573,11 @@ fun AlarmEditorScreen(
                         ChallengeType.SPELL_BEE,
                         ChallengeType.PUZZLE,
                         ChallengeType.SCAN_SINK,
-                        ChallengeType.SCAN_OBJECT
+                        ChallengeType.SCAN_OBJECT,
+                        ChallengeType.SQUAT,
+                        ChallengeType.PUSH_UP,
+                        ChallengeType.REVERSE_TYPING,
+                        ChallengeType.AUDIO_MEMORY
                     )
                     val columns = 2
                     for (i in challengeOptions.indices step columns) {
@@ -509,9 +589,10 @@ fun AlarmEditorScreen(
                                 if (i + j < challengeOptions.size) {
                                     val (type, extraArgs) = challengeOptions[i + j]
                                     val (icon, title, iconColor) = extraArgs
+                                    val isComingSoon = type == ChallengeType.PUSH_UP
                                     val selected = uiState.challengeTypes.contains(type)
                                     val requiresSubscription = type in premiumChallengeTypes
-                                    val isLocked = requiresSubscription && !isSubscribed && !selected
+                                    val isLocked = requiresSubscription && !isSubscribed && !selected && !isComingSoon
                                     val maxActiveChallenges = if (isSubscribed) Int.MAX_VALUE else FREE_CHALLENGE_LIMIT
 
                                     Box(
@@ -528,7 +609,9 @@ fun AlarmEditorScreen(
                                                 shape = RoundedCornerShape(12.dp)
                                             )
                                             .clickable {
-                                                if (isLocked) {
+                                                if (isComingSoon && !selected) {
+                                                    Toast.makeText(context, "Coming soon", Toast.LENGTH_SHORT).show()
+                                                } else if (isLocked && !isComingSoon) {
                                                     onNavigateToSubscription()
                                                 } else {
                                                     val cameraChallenges = setOf(
@@ -539,6 +622,12 @@ fun AlarmEditorScreen(
                                                     
                                                     if (type in cameraChallenges && !cameraPermissionState.status.isGranted) {
                                                         cameraPermissionState.launchPermissionRequest()
+                                                    }
+
+                                                    if (type == ChallengeType.STEP && activityRecognitionPermissionState != null &&
+                                                        !activityRecognitionPermissionState.status.isGranted
+                                                    ) {
+                                                        activityRecognitionPermissionState.launchPermissionRequest()
                                                     }
 
                                                     val didUpdate = viewModel.toggleChallengeType(
@@ -590,7 +679,7 @@ fun AlarmEditorScreen(
                                                     Icon(
                                                         imageVector = icon,
                                                         contentDescription = title,
-                                                        tint = if (selected) MaterialTheme.colorScheme.primary else iconColor,
+                                                        tint = if (selected) MaterialTheme.colorScheme.primary else (if (isComingSoon) iconColor.copy(alpha = 0.75f) else iconColor),
                                                         modifier = Modifier.size(24.dp)
                                                     )
                                                 }
@@ -611,8 +700,16 @@ fun AlarmEditorScreen(
                                                 text = title,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f)
+                                                color = if (selected) MaterialTheme.colorScheme.primary else (if (isComingSoon) Color.White.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.9f))
                                             )
+                                            if (isComingSoon) {
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "Coming Soon",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                    color = iconColor.copy(alpha = 0.8f)
+                                                )
+                                            }
                                         }
                                     }
                                 } else {
@@ -835,6 +932,127 @@ fun AlarmEditorScreen(
                             }
                         }
                     }
+                    // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.PUZZLE)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Puzzle Difficulty", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.animateContentSize()
+                        ) {
+                            MathDifficulty.values().forEach { diff ->
+                                val selected = diff == uiState.puzzleDifficulty
+                                val (description, gridLabel) = when (diff) {
+                                    MathDifficulty.EASY -> "2×2 grid — quick warm-up" to "3 tiles"
+                                    MathDifficulty.MEDIUM -> "3×3 grid — classic puzzle" to "8 tiles"
+                                    MathDifficulty.HARD -> "4×4 grid — serious challenge" to "15 tiles"
+                                    MathDifficulty.EXTREME -> "5×5 grid — brain melter" to "24 tiles"
+                                }
+
+                                val scale by animateFloatAsState(
+                                    targetValue = if (selected) 1.02f else 1.0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    ),
+                                    label = "scale"
+                                )
+                                val bgColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+                                    label = "bgColor"
+                                )
+                                val borderColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                    label = "borderColor"
+                                )
+                                val dotSize by animateDpAsState(
+                                    targetValue = if (selected) 12.dp else 8.dp,
+                                    label = "dotSize"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .fillMaxWidth()
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
+                                        .clickable { viewModel.updatePuzzleDifficulty(diff) }
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(bgColor)
+                                        .border(
+                                            width = if (selected) 2.dp else 1.dp,
+                                            color = borderColor,
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .size(dotSize)
+                                                .clip(CircleShape)
+                                                .background(if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f))
+                                        )
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                diff.name,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+                                                letterSpacing = 1.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.7f)
+                                            )
+
+                                            AnimatedVisibility(
+                                                visible = selected,
+                                                enter = expandVertically(
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                                        stiffness = Spring.StiffnessLow
+                                                    )
+                                                ) + fadeIn(),
+                                                exit = shrinkVertically() + fadeOut()
+                                            ) {
+                                                Column(modifier = Modifier.fillMaxWidth()) {
+                                                    Spacer(modifier = Modifier.height(10.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .background(Color.Black.copy(alpha = 0.3f))
+                                                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                                            .padding(12.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            gridLabel,
+                                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                letterSpacing = 0.5.sp
+                                                            ),
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            textAlign = TextAlign.Center
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (uiState.challengeTypes.contains(ChallengeType.QR_CODE)) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("QR Code Mode", style = MaterialTheme.typography.titleSmall, color = Color.White)
@@ -1049,6 +1267,132 @@ fun AlarmEditorScreen(
                         }
                     }
 
+                    // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.SQUAT)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Squat Target", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val squatOptions = listOf(5, 10, 15, 20, 30)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            squatOptions.forEach { count ->
+                                val isSelected = uiState.squatCount == count
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.updateSquatCount(count) }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$count squats",
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.PUSH_UP)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Push Up Target", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val pushUpOptions = listOf(5, 10, 15, 20, 30)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            pushUpOptions.forEach { count ->
+                                val isSelected = uiState.pushUpCount == count
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.updatePushUpCount(count) }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$count push-ups",
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ──────────────────────────────────────────────────
+                    if (uiState.challengeTypes.contains(ChallengeType.REVERSE_TYPING)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Typing Rounds", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val typingRoundOptions = listOf(1, 2, 3, 5, 7)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            typingRoundOptions.forEach { count ->
+                                val isSelected = uiState.reverseTypingCount == count
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.updateReverseTypingCount(count) }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (count == 1) "$count round" else "$count rounds",
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (uiState.challengeTypes.contains(ChallengeType.SCAN_SINK)) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("Scan Sink Setup", style = MaterialTheme.typography.titleSmall, color = Color.White)
@@ -1180,13 +1524,13 @@ fun AlarmEditorScreen(
                         }
                     }
 
-                    // ──────────────────────────────────────────────────
+                    // Scan Object Settings
                     if (uiState.challengeTypes.contains(ChallengeType.SCAN_OBJECT)) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("Select Object to Scan", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Pick an object you have at home. You'll need to point your camera at it to dismiss the alarm.",
+                            "Pick a specific object or let us randomly choose one when the alarm rings!",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.7f)
                         )
@@ -1207,115 +1551,323 @@ fun AlarmEditorScreen(
                             Triple(Icons.Default.VpnKey, "Key", IconAmber),
                             Triple(Icons.Default.Backpack, "Backpack", IconPink),
                             Triple(Icons.Default.Chair, "Chair", SecondaryOrange),
-                            Triple(Icons.Default.DoorFront, "Door", PrimaryAccent)
+                            Triple(Icons.Default.DoorFront, "Door", PrimaryAccent),
+                            Triple(Icons.Default.Tv, "Television", IconBlue),
+                            Triple(Icons.Default.Computer, "Monitor", IconTeal),
+                            Triple(Icons.Default.Mouse, "Mouse", IconPink),
+                            Triple(Icons.Default.Keyboard, "Keyboard", IconOrange),
+                            Triple(Icons.Default.ContentCut, "Scissors", IconRed),
+                            Triple(Icons.Default.Smartphone, "Phone", IconGreen),
+                            Triple(Icons.Default.Umbrella, "Umbrella", IconPurple),
+                            Triple(Icons.Default.Calculate, "Calculator", IconLime),
+                            Triple(Icons.Default.AccountBalanceWallet, "Wallet", IconCyan),
+                            Triple(Icons.Default.Kitchen, "Refrigerator", PrimaryAccent),
+                            Triple(Icons.Default.Bed, "Bed", IconAmber),
+                            Triple(Icons.Default.DirectionsBike, "Bicycle", SecondaryOrange),
+                            Triple(Icons.Default.Wc, "Toilet", IconIndigo),
+                            Triple(Icons.Default.AccessTime, "Clock", IconYellow),
+                            Triple(Icons.Default.Headphones, "Headphones", Color.LightGray)
                         )
 
-                        val objColumns = 3
-                        for (i in objectOptions.indices step objColumns) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                for (j in 0 until objColumns) {
-                                    if (i + j < objectOptions.size) {
-                                        val (objIcon, label, iconColor) = objectOptions[i + j]
-                                        val isSelected = uiState.scanObjectLabel.equals(label, ignoreCase = true)
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(
-                                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                                    else Color.White.copy(alpha = 0.05f)
-                                                )
-                                                .border(
-                                                    width = 1.dp,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
-                                                    shape = RoundedCornerShape(10.dp)
-                                                )
-                                                .clickable { viewModel.updateScanObjectLabel(label) }
-                                                .padding(vertical = 10.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(40.dp)
-                                                        .shadow(
-                                                            elevation = 6.dp,
-                                                            shape = CircleShape,
-                                                            ambientColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else iconColor.copy(alpha = 0.5f),
-                                                            spotColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else iconColor.copy(alpha = 0.5f)
-                                                        )
-                                                        .clip(CircleShape)
-                                                        .background(
-                                                            Brush.radialGradient(
-                                                                colors = if (isSelected) listOf(
-                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                                                ) else listOf(
-                                                                    iconColor.copy(alpha = 0.35f),
-                                                                    iconColor.copy(alpha = 0.08f)
-                                                                )
-                                                            )
-                                                        )
-                                                        .border(
-                                                            width = 1.dp,
-                                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else iconColor.copy(alpha = 0.35f),
-                                                            shape = CircleShape
-                                                        ),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = objIcon,
-                                                        contentDescription = label,
-                                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else iconColor,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Text(
-                                                    label,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    textAlign = TextAlign.Center
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        Spacer(modifier = Modifier.weight(1f))
+                        val isRandomMode = uiState.scanObjectLabel == "RANDOM"
+
+                        // Mode selector: Pick vs Random
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Pick specific
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (!isRandomMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else Color.White.copy(alpha = 0.05f)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (!isRandomMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable {
+                                        if (isRandomMode) viewModel.updateScanObjectLabel("")
                                     }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        Icons.Default.TouchApp,
+                                        contentDescription = "Pick",
+                                        tint = if (!isRandomMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Pick One",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (!isRandomMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+                                        fontWeight = if (!isRandomMode) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 }
                             }
-                            if (i + objColumns < objectOptions.size) {
-                                Spacer(modifier = Modifier.height(8.dp))
+                            // Random
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isRandomMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else Color.White.copy(alpha = 0.05f)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isRandomMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { viewModel.updateScanObjectLabel("RANDOM") }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = "Random",
+                                        tint = if (isRandomMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Random",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (isRandomMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+                                        fontWeight = if (isRandomMode) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
                             }
                         }
 
-                        if (uiState.scanObjectLabel.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (isRandomMode) {
+                            // Random mode: excludable grid
                             Text(
-                                "Selected: ${uiState.scanObjectLabel}",
+                                "A random object will be picked when alarm rings. Tap to exclude objects you don't have:",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
+                                color = Color.White.copy(alpha = 0.7f)
                             )
-                        } else {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
+
+                            val objColumns = 3
+                            for (i in objectOptions.indices step objColumns) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    for (j in 0 until objColumns) {
+                                        if (i + j < objectOptions.size) {
+                                            val (objIcon, label, iconColor) = objectOptions[i + j]
+                                            val isExcluded = uiState.scanObjectExcluded.contains(label)
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(
+                                                        if (isExcluded) Color.White.copy(alpha = 0.02f)
+                                                        else Color.White.copy(alpha = 0.05f)
+                                                    )
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = if (isExcluded) MaterialTheme.colorScheme.error.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f),
+                                                        shape = RoundedCornerShape(10.dp)
+                                                    )
+                                                    .clickable { viewModel.toggleScanObjectExcluded(label) }
+                                                    .padding(vertical = 10.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .clip(CircleShape)
+                                                            .background(
+                                                                Brush.radialGradient(
+                                                                    colors = listOf(
+                                                                        iconColor.copy(alpha = if (isExcluded) 0.1f else 0.35f),
+                                                                        iconColor.copy(alpha = if (isExcluded) 0.02f else 0.08f)
+                                                                    )
+                                                                )
+                                                            )
+                                                            .border(
+                                                                width = 1.dp,
+                                                                color = iconColor.copy(alpha = if (isExcluded) 0.1f else 0.35f),
+                                                                shape = CircleShape
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = objIcon,
+                                                            contentDescription = label,
+                                                            tint = if (isExcluded) Color.White.copy(alpha = 0.2f) else iconColor,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        label,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (isExcluded) Color.White.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.9f),
+                                                        fontWeight = FontWeight.Normal,
+                                                        textAlign = TextAlign.Center,
+                                                        textDecoration = if (isExcluded) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                                if (i + objColumns < objectOptions.size) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+
+                            val availableCount = objectOptions.size - uiState.scanObjectExcluded.size
+                            Spacer(modifier = Modifier.height(8.dp))
+                            if (availableCount < 2) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        "Keep at least 2 objects included",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            } else {
                                 Text(
-                                    "Please select an object",
+                                    "\uD83C\uDFB2 $availableCount objects in the pool",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
                                 )
+                            }
+                        } else {
+                            // Pick mode: same grid as before
+                            val objColumns = 3
+                            for (i in objectOptions.indices step objColumns) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    for (j in 0 until objColumns) {
+                                        if (i + j < objectOptions.size) {
+                                            val (objIcon, label, iconColor) = objectOptions[i + j]
+                                            val isSelected = uiState.scanObjectLabel.equals(label, ignoreCase = true)
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(
+                                                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                        else Color.White.copy(alpha = 0.05f)
+                                                    )
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                                        shape = RoundedCornerShape(10.dp)
+                                                    )
+                                                    .clickable { viewModel.updateScanObjectLabel(label) }
+                                                    .padding(vertical = 10.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .shadow(
+                                                                elevation = 6.dp,
+                                                                shape = CircleShape,
+                                                                ambientColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else iconColor.copy(alpha = 0.5f),
+                                                                spotColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else iconColor.copy(alpha = 0.5f)
+                                                            )
+                                                            .clip(CircleShape)
+                                                            .background(
+                                                                Brush.radialGradient(
+                                                                    colors = if (isSelected) listOf(
+                                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                                                    ) else listOf(
+                                                                        iconColor.copy(alpha = 0.35f),
+                                                                        iconColor.copy(alpha = 0.08f)
+                                                                    )
+                                                                )
+                                                            )
+                                                            .border(
+                                                                width = 1.dp,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else iconColor.copy(alpha = 0.35f),
+                                                                shape = CircleShape
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = objIcon,
+                                                            contentDescription = label,
+                                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else iconColor,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        label,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                                if (i + objColumns < objectOptions.size) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+
+                            if (uiState.scanObjectLabel.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Selected: ${uiState.scanObjectLabel}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        "Please select an object",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
                     }
