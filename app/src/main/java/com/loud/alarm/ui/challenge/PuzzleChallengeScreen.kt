@@ -1,5 +1,7 @@
 package com.loud.alarm.ui.challenge
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,8 +27,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import com.loud.alarm.data.MathDifficulty
 
@@ -91,14 +100,34 @@ fun PuzzleChallengeScreen(
     var board by rememberSaveable { mutableStateOf(generateScrambledBoard(puzzleSize, scrambleMoves)) }
     var moves by rememberSaveable { mutableStateOf(0) }
     val isSolved = board == targetBoard
+    var showError by remember { mutableStateOf(false) }
+
+    val backgroundColor by animateColorAsState(
+        targetValue = if (showError) Color.Red.copy(alpha = 0.3f) else Color.Transparent,
+        animationSpec = tween(durationMillis = 300),
+        label = "ErrorBackground"
+    )
 
     LaunchedEffect(isSolved) {
-        if (isSolved) onSuccess()
+        if (isSolved) {
+            delay(300)
+            onSuccess()
+        }
+    }
+
+    LaunchedEffect(showError) {
+        if (showError) {
+            delay(300)
+            showError = false
+        }
     }
 
     fun onTileTap(index: Int) {
         val blankIndex = board.indexOf(0)
-        if (index !in adjacentIndices(blankIndex, puzzleSize)) return
+        if (index !in adjacentIndices(blankIndex, puzzleSize)) {
+            showError = true
+            return
+        }
         val next = board.toMutableList()
         val temp = next[index]
         next[index] = next[blankIndex]
@@ -117,6 +146,7 @@ fun PuzzleChallengeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(backgroundColor)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -141,51 +171,57 @@ fun PuzzleChallengeScreen(
         )
 
         Spacer(modifier = Modifier.height(32.dp))
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .background(Color(0xFF2C2C2E), RoundedCornerShape(16.dp))
                 .padding(8.dp)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                for (r in 0 until puzzleSize) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(if (puzzleSize <= 3) 8.dp else 4.dp)
-                    ) {
-                        for (c in 0 until puzzleSize) {
-                            val index = r * puzzleSize + c
-                            val value = board[index]
-                            val isBlank = value == 0
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(if (puzzleSize <= 3) 12.dp else 8.dp))
-                                    .background(
-                                        if (isBlank) Color(0xFF1E1E20)
-                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                                    )
-                                    .clickable(enabled = !isBlank) { onTileTap(index) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (!isBlank) {
-                                    Text(
-                                        text = value.toString(),
-                                        style = tileTextStyle,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    if (r < puzzleSize - 1) {
-                        Spacer(modifier = Modifier.height(if (puzzleSize <= 3) 8.dp else 4.dp))
-                    }
+            val spacing = if (puzzleSize <= 3) 8.dp else 4.dp
+            val tileSize = (maxWidth - spacing * (puzzleSize - 1)) / puzzleSize
+
+            val tileColor by animateColorAsState(
+                targetValue = if (isSolved) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                animationSpec = tween(300),
+                label = "tileColor"
+            )
+
+            for (value in 1 until puzzleSize * puzzleSize) {
+                val index = board.indexOf(value)
+                if (index == -1) continue
+                val row = index / puzzleSize
+                val col = index % puzzleSize
+
+                val offsetX = (tileSize + spacing) * col
+                val offsetY = (tileSize + spacing) * row
+
+                val animOffsetX by animateDpAsState(
+                    targetValue = offsetX,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "offsetX"
+                )
+                val animOffsetY by animateDpAsState(
+                    targetValue = offsetY,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "offsetY"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .offset(animOffsetX, animOffsetY)
+                        .size(tileSize)
+                        .clip(RoundedCornerShape(if (puzzleSize <= 3) 12.dp else 8.dp))
+                        .background(tileColor)
+                        .clickable(enabled = !isSolved) { onTileTap(index) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = value.toString(),
+                        style = tileTextStyle,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

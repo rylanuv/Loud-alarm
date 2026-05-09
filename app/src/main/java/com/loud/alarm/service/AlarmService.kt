@@ -75,23 +75,49 @@ class AlarmService : Service() {
         @Volatile
         private var activeInstance: AlarmService? = null
 
-        /** Dim the alarm ringtone so TTS can be heard */
+        /** Saved MUSIC stream volume before TTS boost */
+        private var savedMusicVolume: Int = -1
+
+        /** Dim the alarm ringtone and boost TTS stream so words are loud and clear */
         fun dimAlarmVolume() {
             activeInstance?.let { svc ->
                 svc.isVolumeDimmed = true
-                svc.mediaPlayer?.setVolume(0.05f, 0.05f)
+                svc.mediaPlayer?.setVolume(0.02f, 0.02f)
                 svc.loudnessEnhancer?.enabled = false
-                Log.d(TAG, "Alarm volume dimmed for TTS")
+                // Pause vibration so user can hear TTS clearly
+                svc.vibrator?.cancel()
+                // Crank TTS stream (MUSIC) to max volume
+                try {
+                    val am = svc.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    savedMusicVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    val maxMusic = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, maxMusic, 0)
+                    Log.d(TAG, "TTS stream boosted to max ($maxMusic), was $savedMusicVolume")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to boost TTS stream volume", e)
+                }
+                Log.d(TAG, "Alarm volume dimmed + vibration paused for TTS")
             }
         }
 
-        /** Restore the alarm ringtone to full volume */
+        /** Restore the alarm ringtone and TTS stream to original levels */
         fun restoreAlarmVolume() {
             activeInstance?.let { svc ->
                 svc.isVolumeDimmed = false
                 svc.mediaPlayer?.setVolume(1f, 1f)
                 if (svc.currentVolumeBoostEnabled) {
                     svc.loudnessEnhancer?.enabled = true
+                }
+                // Restore TTS stream (MUSIC) to previous volume
+                if (savedMusicVolume >= 0) {
+                    try {
+                        val am = svc.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                        am.setStreamVolume(AudioManager.STREAM_MUSIC, savedMusicVolume, 0)
+                        Log.d(TAG, "TTS stream restored to $savedMusicVolume")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to restore TTS stream volume", e)
+                    }
+                    savedMusicVolume = -1
                 }
                 Log.d(TAG, "Alarm volume restored after TTS")
             }

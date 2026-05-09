@@ -14,6 +14,8 @@ import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 import com.android.billingclient.api.AcknowledgePurchaseParams
+import com.loud.alarm.analytics.AnalyticsLogger
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +24,8 @@ import javax.inject.Singleton
 
 @Singleton
 class BillingManager @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context,
+    private val analyticsLogger: AnalyticsLogger
 ) : PurchasesUpdatedListener {
 
     companion object {
@@ -240,6 +243,7 @@ class BillingManager @Inject constructor(
                 if (lifetimePurchased) {
                     _isSubscribed.value = true
                     _activePlan.value = PRODUCT_ID_LIFETIME
+                    analyticsLogger.setPremiumPlan(PRODUCT_ID_LIFETIME)
                     Log.d(TAG, "Lifetime purchased: true")
                 }
 
@@ -267,11 +271,13 @@ class BillingManager @Inject constructor(
                             purchase.products.contains(PRODUCT_ID_MONTHLY) -> {
                                 _isSubscribed.value = true
                                 _activePlan.value = PRODUCT_ID_MONTHLY
+                                analyticsLogger.setPremiumPlan(PRODUCT_ID_MONTHLY)
                                 Log.d(TAG, "Monthly subscription active")
                             }
                             purchase.products.contains(PRODUCT_ID_YEARLY) -> {
                                 _isSubscribed.value = true
                                 _activePlan.value = PRODUCT_ID_YEARLY
+                                analyticsLogger.setPremiumPlan(PRODUCT_ID_YEARLY)
                                 Log.d(TAG, "Yearly subscription active")
                             }
                         }
@@ -304,6 +310,7 @@ class BillingManager @Inject constructor(
             .setProductDetailsParamsList(productDetailsParamsList)
             .build()
 
+        analyticsLogger.logPurchaseFlowStarted(PRODUCT_ID_QR_CODE)
         billingClient?.launchBillingFlow(activity, billingFlowParams)
     }
 
@@ -343,6 +350,7 @@ class BillingManager @Inject constructor(
             .setProductDetailsParamsList(listOf(productDetailsParamsBuilder.build()))
             .build()
 
+        analyticsLogger.logPurchaseFlowStarted(planType)
         billingClient?.launchBillingFlow(activity, billingFlowParams)
     }
 
@@ -354,6 +362,7 @@ class BillingManager @Inject constructor(
                         // Check QR code purchase
                         if (purchase.products.contains(PRODUCT_ID_QR_CODE)) {
                             _isQrCodePurchased.value = true
+                            analyticsLogger.logPurchaseCompleted(PRODUCT_ID_QR_CODE)
                             Log.d(TAG, "QR Code challenge purchased successfully!")
                         }
                         // Check subscription/lifetime purchases
@@ -361,6 +370,7 @@ class BillingManager @Inject constructor(
                             if (productId in ALL_PREMIUM_PRODUCT_IDS) {
                                 _isSubscribed.value = true
                                 _activePlan.value = productId
+                                analyticsLogger.logPurchaseCompleted(productId)
                                 Log.d(TAG, "Premium plan purchased: $productId")
                             }
                         }
@@ -371,9 +381,11 @@ class BillingManager @Inject constructor(
                 }
             }
             BillingClient.BillingResponseCode.USER_CANCELED -> {
+                analyticsLogger.logPurchaseCancelled()
                 Log.d(TAG, "User cancelled purchase")
             }
             else -> {
+                analyticsLogger.logPurchaseFailed(billingResult.responseCode)
                 Log.e(TAG, "Purchase failed: ${billingResult.debugMessage}")
             }
         }
@@ -394,6 +406,7 @@ class BillingManager @Inject constructor(
     }
 
     fun restorePurchases() {
+        analyticsLogger.logRestorePurchases()
         queryExistingPurchases()
         queryExistingSubscriptions()
     }
@@ -414,6 +427,9 @@ class BillingManager @Inject constructor(
 
     fun setSubscribed(subscribed: Boolean) {
         _isSubscribed.value = subscribed
+        if (!subscribed) {
+            analyticsLogger.setPremiumPlan(null)
+        }
     }
 
     fun destroy() {

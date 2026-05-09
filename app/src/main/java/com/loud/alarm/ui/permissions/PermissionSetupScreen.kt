@@ -1,7 +1,6 @@
 package com.loud.alarm.ui.permissions
 
 import android.Manifest
-import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -33,13 +32,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -97,10 +93,8 @@ data class RequiredPermissionsStatus(
         get() = items.filterNot(RequiredPermissionItem::granted)
 }
 enum class RequiredPermissionType {
-    EXACT_ALARM,
     BATTERY_OPTIMIZATION,
-    NOTIFICATIONS,
-    CAMERA
+    NOTIFICATIONS
 }
 
 @Composable
@@ -206,7 +200,6 @@ fun PermissionSetupPage(
     var queuedPrompts by remember { mutableStateOf<List<RequiredPermissionType>>(emptyList()) }
     var promptIndex by remember { mutableIntStateOf(0) }
     var activePrompt by remember { mutableStateOf<RequiredPermissionType?>(null) }
-    var showDeniedWarning by rememberSaveable { mutableStateOf(false) }
     var hasAutoPrompted by rememberSaveable { mutableStateOf(false) }
 
     fun refreshStatus() {
@@ -215,7 +208,6 @@ fun PermissionSetupPage(
 
     fun startPromptFlow() {
         refreshStatus()
-        showDeniedWarning = false
         queuedPrompts = status.missingItems.map(RequiredPermissionItem::type)
         promptIndex = 0
         activePrompt = null
@@ -224,23 +216,16 @@ fun PermissionSetupPage(
     val settingsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
-        val completedPrompt = activePrompt
         activePrompt = null
         refreshStatus()
-        if (completedPrompt != null && !status.isGranted(completedPrompt)) {
-            showDeniedWarning = true
-        }
         promptIndex += 1
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    ) {
         activePrompt = null
         refreshStatus()
-        if (!granted) {
-            showDeniedWarning = true
-        }
         promptIndex += 1
     }
 
@@ -268,15 +253,10 @@ fun PermissionSetupPage(
         activePrompt = nextPrompt
 
         when (nextPrompt) {
-            RequiredPermissionType.NOTIFICATIONS,
-            RequiredPermissionType.CAMERA -> {
-                notificationPermissionLauncher.launch(
-                    if (nextPrompt == RequiredPermissionType.NOTIFICATIONS) Manifest.permission.POST_NOTIFICATIONS
-                    else Manifest.permission.CAMERA
-                )
+            RequiredPermissionType.NOTIFICATIONS -> {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
 
-            RequiredPermissionType.EXACT_ALARM,
             RequiredPermissionType.BATTERY_OPTIMIZATION -> {
                 settingsLauncher.launch(nextPrompt.buildIntent(context))
             }
@@ -308,7 +288,6 @@ fun PermissionSetupPage(
             PermissionStatusCard(
                 item = item,
                 onClick = {
-                    showDeniedWarning = false
                     queuedPrompts = listOf(item.type)
                     promptIndex = 0
                     activePrompt = null
@@ -316,14 +295,7 @@ fun PermissionSetupPage(
             )
         }
 
-        if (showDeniedWarning && !status.allGranted) {
-            PermissionMessageCard(
-                icon = Icons.Default.Warning,
-                title = "Permissions still missing",
-                body = "Some permissions are still off. Enable them so alarms ring reliably.",
-                accent = Color(0xFFFF453A)
-            )
-        } else if (status.allGranted) {
+        if (status.allGranted) {
             CompactReadyStatus()
         }
 
@@ -489,48 +461,6 @@ private fun StatusPill(
 }
 
 @Composable
-private fun PermissionMessageCard(
-    icon: ImageVector,
-    title: String,
-    body: String,
-    accent: Color
-) {
-    GlassCard {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(accent.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = accent
-                )
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.78f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun GlassCard(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(18.dp),
@@ -563,18 +493,6 @@ private fun GlassCard(
 
 private fun Context.readRequiredPermissionsStatus(): RequiredPermissionsStatus {
     val items = buildList {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            add(
-                RequiredPermissionItem(
-                    type = RequiredPermissionType.EXACT_ALARM,
-                    title = "Exact alarms",
-                    description = "Lets alarms ring at the exact minute you set.",
-                    granted = canScheduleExactAlarms(),
-                    icon = Icons.Default.Alarm
-                )
-            )
-        }
-
         add(
             RequiredPermissionItem(
                 type = RequiredPermissionType.BATTERY_OPTIMIZATION,
@@ -597,33 +515,9 @@ private fun Context.readRequiredPermissionsStatus(): RequiredPermissionsStatus {
             )
         }
 
-        add(
-            RequiredPermissionItem(
-                type = RequiredPermissionType.CAMERA,
-                title = "Camera access",
-                description = "Required for QR code and object scanning challenges.",
-                granted = hasCameraPermission(),
-                icon = Icons.Default.CameraAlt
-            )
-        )
     }
 
     return RequiredPermissionsStatus(items = items)
-}
-
-private fun Context.hasCameraPermission(): Boolean {
-    return ContextCompat.checkSelfPermission(
-        this,
-        Manifest.permission.CAMERA
-    ) == PackageManager.PERMISSION_GRANTED
-}
-
-private fun Context.canScheduleExactAlarms(): Boolean {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-        return true
-    }
-    val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    return alarmManager.canScheduleExactAlarms()
 }
 
 private fun Context.isIgnoringBatteryOptimizations(): Boolean {
@@ -641,22 +535,9 @@ private fun Context.hasNotificationPermission(): Boolean {
     ) == PackageManager.PERMISSION_GRANTED
 }
 
-private fun RequiredPermissionsStatus.isGranted(type: RequiredPermissionType): Boolean {
-    return items.firstOrNull { it.type == type }?.granted ?: true
-}
-
 private fun RequiredPermissionType.buildIntent(context: Context): Intent {
     val packageUri = Uri.parse("package:${context.packageName}")
     val candidates = when (this) {
-        RequiredPermissionType.EXACT_ALARM -> listOf(
-            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                data = packageUri
-            },
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = packageUri
-            }
-        )
-
         RequiredPermissionType.BATTERY_OPTIMIZATION -> listOf(
             Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = packageUri
@@ -671,12 +552,6 @@ private fun RequiredPermissionType.buildIntent(context: Context): Intent {
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                 putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             },
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = packageUri
-            }
-        )
-
-        RequiredPermissionType.CAMERA -> listOf(
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = packageUri
             }

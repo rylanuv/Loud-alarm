@@ -35,6 +35,8 @@ class SettingsRepository @Inject constructor(
         val VIBRATION_PATTERN = stringPreferencesKey("vibration_pattern")
         val ALARM_DISMISS_COUNT = intPreferencesKey("alarm_dismiss_count")
         val REVIEW_SHOWN = booleanPreferencesKey("review_shown")
+        val IS_DEV_MODE_ENABLED = booleanPreferencesKey("is_dev_mode_enabled")
+        val SKELETON_OVERLAY_ENABLED = booleanPreferencesKey("skeleton_overlay_enabled")
     }
 
     val vibrationEnabled: Flow<Boolean> = context.dataStore.data
@@ -85,6 +87,16 @@ class SettingsRepository @Inject constructor(
     val vibrationPattern: Flow<String> = context.dataStore.data
         .map { preferences: Preferences ->
             preferences[PreferencesKeys.VIBRATION_PATTERN] ?: VibrationPattern.DEVICE_DEFAULT.name
+        }
+
+    val isDevModeEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.IS_DEV_MODE_ENABLED] ?: false
+        }
+
+    val skeletonOverlayEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.SKELETON_OVERLAY_ENABLED] ?: false
         }
 
     suspend fun setVibrationEnabled(enabled: Boolean) {
@@ -144,6 +156,18 @@ class SettingsRepository @Inject constructor(
     suspend fun setVibrationPattern(patternName: String) {
         context.dataStore.edit { preferences: MutablePreferences ->
             preferences[PreferencesKeys.VIBRATION_PATTERN] = patternName
+        }
+    }
+
+    suspend fun setDevModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.IS_DEV_MODE_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setSkeletonOverlayEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.SKELETON_OVERLAY_ENABLED] = enabled
         }
     }
 

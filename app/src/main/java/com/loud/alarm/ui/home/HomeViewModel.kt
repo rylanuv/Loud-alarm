@@ -3,7 +3,9 @@ package com.loud.alarm.ui.home
 import android.os.CountDownTimer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.loud.alarm.analytics.AnalyticsLogger
 import com.loud.alarm.data.Alarm
+import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.AlarmRepository
 import com.loud.alarm.review.InAppReviewManager
 import com.loud.alarm.service.AlarmScheduler
@@ -25,7 +27,8 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val repository: AlarmRepository,
     private val scheduler: AlarmScheduler,
-    private val reviewManager: InAppReviewManager
+    private val reviewManager: InAppReviewManager,
+    private val analyticsLogger: AnalyticsLogger
 ) : ViewModel() {
 
     val alarms: StateFlow<List<Alarm>> = repository.allAlarms
@@ -60,6 +63,11 @@ class HomeViewModel @Inject constructor(
             } else {
                 scheduler.cancel(newAlarm)
             }
+            analyticsLogger.logAlarmToggled(
+                enabled = newAlarm.enabled,
+                challengeCount = alarm.analyticsChallengeCount(),
+                isRepeating = alarm.daysOfWeek.isNotEmpty()
+            )
         }
     }
 
@@ -67,6 +75,10 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             scheduler.cancel(alarm)
             repository.delete(alarm)
+            analyticsLogger.logAlarmDeleted(
+                challengeCount = alarm.analyticsChallengeCount(),
+                isRepeating = alarm.daysOfWeek.isNotEmpty()
+            )
         }
     }
 
@@ -131,5 +143,9 @@ class HomeViewModel @Inject constructor(
      */
     suspend fun requestReview(activity: android.app.Activity) {
         reviewManager.requestReview(activity)
+    }
+
+    private fun Alarm.analyticsChallengeCount(): Int {
+        return challengeTypes.count { it != ChallengeType.NONE }
     }
 }

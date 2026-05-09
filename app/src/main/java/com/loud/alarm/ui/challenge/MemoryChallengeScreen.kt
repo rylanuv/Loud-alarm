@@ -1,5 +1,7 @@
 package com.loud.alarm.ui.challenge
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,20 +30,45 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.loud.alarm.data.MathDifficulty
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
-fun MemoryChallengeScreen(onSuccess: () -> Unit) {
-    val gridSize = 3
+fun MemoryChallengeScreen(
+    difficulty: MathDifficulty = MathDifficulty.EASY,
+    challengeCount: Int = 3,
+    onSuccess: () -> Unit
+) {
+    // Difficulty controls grid size and starting sequence length
+    val gridSize = when (difficulty) {
+        MathDifficulty.EASY -> 3
+        MathDifficulty.MEDIUM -> 3
+        MathDifficulty.HARD -> 4
+        MathDifficulty.EXTREME -> 4
+    }
+    val startingSequenceLength = when (difficulty) {
+        MathDifficulty.EASY -> 3
+        MathDifficulty.MEDIUM -> 4
+        MathDifficulty.HARD -> 5
+        MathDifficulty.EXTREME -> 6
+    }
+    val totalLevels = challengeCount
+
     var sequence by remember { mutableStateOf(listOf<Int>()) }
     var userSequence by remember { mutableStateOf(listOf<Int>()) }
     var activeTile by remember { mutableStateOf<Int?>(null) }
     var isShowingSequence by remember { mutableStateOf(false) }
-    var sequenceLength by remember { mutableStateOf(4) }
+    var sequenceLength by remember { mutableStateOf(startingSequenceLength) }
     var level by remember { mutableStateOf(1) }
     
+    var isError by remember { mutableStateOf(false) }
+    var isSuccess by remember { mutableStateOf(false) }
+    
+    val coroutineScope = rememberCoroutineScope()
+    
     LaunchedEffect(level) {
-        delay(1000)
+        delay(800)
         // Generate new sequence
         isShowingSequence = true
         userSequence = emptyList()
@@ -50,7 +78,7 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
         // Play sequence
         for (tile in sequence) {
             activeTile = tile
-            delay(500)
+            delay(400)
             activeTile = null
             delay(200)
         }
@@ -61,19 +89,32 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
         if (userSequence.isNotEmpty()) {
             val isCorrectSoFar = userSequence.indices.all { i -> userSequence[i] == sequence[i] }
             if (!isCorrectSoFar) {
-                // Incorrect input: replay the same sequence, then clear input.
+                // Incorrect input: show error without text, then replay.
                 isShowingSequence = true
+                activeTile = null
+                isError = true
+                delay(500)
+                isError = false
+                delay(300)
+                
+                // Replay the sequence
                 for (tile in sequence) {
                     activeTile = tile
-                    delay(500)
+                    delay(400)
                     activeTile = null
                     delay(200)
                 }
-                activeTile = null
                 userSequence = emptyList()
                 isShowingSequence = false
             } else if (userSequence.size == sequence.size) {
-                if (level >= 3) {
+                // Correct
+                isShowingSequence = true
+                activeTile = null
+                isSuccess = true
+                delay(500)
+                isSuccess = false
+                
+                if (level >= totalLevels) {
                     onSuccess()
                 } else {
                     sequenceLength += 1
@@ -97,14 +138,24 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(8.dp))
+        
+        // Show status text or hide it during error/success states for cleaner UX
+        val statusText = when {
+            isError -> ""
+            isSuccess -> "Good Job!"
+            isShowingSequence -> "Watch the pattern"
+            else -> "Repeat the pattern"
+        }
+        
         Text(
-            text = if (isShowingSequence) "Watch the pattern" else "Repeat the pattern",
+            text = statusText,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (isError) Color.Transparent else MaterialTheme.colorScheme.onSurfaceVariant
         )
+        
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Level $level / 3",
+            text = "Level $level / $totalLevels",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary
         )
@@ -127,9 +178,19 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
                         for (c in 0 until gridSize) {
                             val tileIndex = r * gridSize + c
                             val isActive = activeTile == tileIndex
-                            // Or temporarily blink on tap
                             
-                            val tileColor = if (isActive) MaterialTheme.colorScheme.primary else Color(0xFF4C4C4E)
+                            val targetColor = when {
+                                isError -> Color(0xFFE53935) // Red
+                                isSuccess -> Color(0xFF43A047) // Green
+                                isActive -> MaterialTheme.colorScheme.primary
+                                else -> Color(0xFF4C4C4E)
+                            }
+                            
+                            val tileColor by animateColorAsState(
+                                targetValue = targetColor,
+                                animationSpec = tween(durationMillis = 150),
+                                label = "tileColor"
+                            )
 
                             Box(
                                 modifier = Modifier
@@ -138,11 +199,15 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
                                     .fillMaxSize()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(tileColor)
-                                    .clickable {
-                                        if (!isShowingSequence) {
-                                            activeTile = tileIndex
-                                            userSequence = userSequence + tileIndex
+                                    .clickable(enabled = !isShowingSequence) {
+                                        activeTile = tileIndex
+                                        coroutineScope.launch {
+                                            delay(150)
+                                            if (activeTile == tileIndex) {
+                                                activeTile = null
+                                            }
                                         }
+                                        userSequence = userSequence + tileIndex
                                     }
                             )
                         }
@@ -152,3 +217,4 @@ fun MemoryChallengeScreen(onSuccess: () -> Unit) {
         }
     }
 }
+

@@ -45,10 +45,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,252 +87,578 @@ private enum class ScanPhase {
 
 private const val TAG = "ScanChallengeScreen"
 
-// ── Confidence thresholds (lowered for Play Services thin model) ──────────
-private const val DEFAULT_MATCH_CONFIDENCE = 0.18f
-private const val KEYBOARD_MATCH_CONFIDENCE = 0.15f
-private const val KEYBOARD_MUSICAL_INSTRUMENT_CONFIDENCE = 0.50f
-private const val SMALL_OBJECT_MATCH_CONFIDENCE = 0.08f
+// ── Confidence thresholds ────────────────────────────────────────────────
+private const val LABELER_CANDIDATE_CONFIDENCE = 0.05f
+private const val DEFAULT_MATCH_CONFIDENCE = 0.15f
+private const val SMALL_OBJECT_MATCH_CONFIDENCE = 0.10f
 private const val LARGE_OBJECT_MATCH_CONFIDENCE = 0.12f
+private const val SECONDARY_MATCH_CONFIDENCE = 0.20f
+private const val TERTIARY_MATCH_CONFIDENCE = 0.25f
+private const val SHORT_PRIMARY_LABEL_CONFIDENCE = 0.18f
 
 // ── Consecutive / sliding-window frame requirements ──────────────────────
 private const val CONSECUTIVE_FRAMES_REQUIRED = 2
-private const val SLIDING_WINDOW_SIZE = 4
-private const val SLIDING_WINDOW_HITS_REQUIRED = 2
+private const val SLIDING_WINDOW_SIZE = 6
+private const val SLIDING_WINDOW_HITS_REQUIRED = 3
 
 /**
- * Map from our app's user-facing target labels to all the ML Kit labels
- * (from Image Labeling) that should be accepted as a valid match.
+ * Broad alias map used as a tertiary fallback in the matching pipeline.
+ * The primary matcher uses [targetLabelSpecs] for target-specific labels,
+ * but this map catches additional coarse/generic labels that the model
+ * may return when it can't identify the object precisely.
  * Keys and values are all lowercase.
- *
- * The Play Services (thin) variant of Image Labeling returns a set of
- * labels that sometimes differs from the bundled variant. We add broad
- * coverage to maximise hit rate.
  */
 private val targetAliasMap: Map<String, Set<String>> = mapOf(
     "toothbrush" to setOf(
         "toothbrush", "tooth brushing", "brush", "dental",
-        "oral hygiene", "bathroom accessory", "personal care"
+        "oral hygiene", "bathroom accessory", "personal care",
+        "plastic", "bathroom", "hygiene"
     ),
     "sink" to setOf(
         "sink", "plumbing fixture", "bathroom sink", "kitchen sink",
         "washbasin", "tap", "faucet", "plumbing", "bathroom",
-        "countertop", "basin", "lavatory", "wash", "water"
+        "basin", "lavatory", "porcelain", "ceramic"
     ),
     "coffee cup" to setOf(
         "coffee cup", "cup", "mug", "coffee", "drinkware",
         "tableware", "serveware", "teacup", "espresso",
-        "ceramic", "drink", "beverage", "porcelain", "pottery"
+        "ceramic", "porcelain", "pottery", "dishware", "beverage"
     ),
     "bowl" to setOf(
         "bowl", "mixing bowl", "tableware", "ceramic",
         "serveware", "dishware", "dish", "plate", "porcelain",
-        "pottery", "kitchenware"
+        "pottery", "kitchenware", "soup bowl", "food"
     ),
     "shoe" to setOf(
         "shoe", "sneakers", "footwear", "boot", "running shoe",
         "athletic shoe", "walking shoe", "outdoor shoe", "tennis shoe",
         "sandal", "slipper", "high heel", "loafer", "sports shoe",
-        "sole", "lace", "ankle"
+        "leather", "rubber", "textile", "sole"
     ),
     "book" to setOf(
-        "book", "publication", "novel", "textbook", "paper",
-        "document", "notebook", "paper product", "magazine",
-        "reading", "page", "text", "literature", "hardcover",
-        "paperback", "booklet", "diary", "journal"
+        "book", "publication", "novel", "textbook",
+        "notebook", "paper product", "magazine",
+        "reading", "literature", "hardcover",
+        "paperback", "booklet", "diary", "journal",
+        "comic book", "book jacket", "bookcase", "bookshop",
+        "text", "paper", "document", "font", "rectangle",
+        "page", "cover", "library", "writing", "education"
     ),
     "plant" to setOf(
         "plant", "houseplant", "flower", "flowerpot", "herb",
-        "potted plant", "vascular plant", "grass", "leaf",
-        "shrub", "tree", "vegetation", "garden", "flora",
-        "green", "foliage", "succulent", "cactus", "fern",
-        "indoor plant", "nature"
+        "potted plant", "vascular plant", "leaf",
+        "shrub", "tree", "vegetation", "flora",
+        "foliage", "succulent", "cactus", "fern",
+        "indoor plant", "green", "garden", "nature"
     ),
     "laptop" to setOf(
         "laptop", "notebook", "computer", "personal computer",
-        "netbook", "electronic device", "output device",
-        "computer hardware", "screen", "display", "keyboard",
-        "technology", "portable computer", "computing"
+        "netbook", "output device",
+        "computer hardware", "portable computer",
+        "technology", "electronic device", "gadget", "screen"
     ),
     "fruit" to setOf(
         "fruit", "apple", "banana", "orange", "food",
         "natural foods", "produce", "citrus", "pineapple",
         "mango", "grapes", "berry", "strawberry", "lemon",
         "watermelon", "pear", "peach", "kiwi", "plum",
-        "cherry", "melon", "tropical fruit", "fresh",
-        "healthy", "organic"
+        "cherry", "melon", "tropical fruit", "jackfruit",
+        "vegetable", "plant", "diet"
     ),
     "bottle" to setOf(
         "bottle", "water bottle", "plastic bottle", "glass bottle",
-        "wine bottle", "drinkware", "beverage can", "drink",
-        "container", "flask", "jar", "liquid", "cap", "lid",
-        "beverage", "beer bottle", "soda bottle"
+        "wine bottle", "drinkware", "beverage can",
+        "flask", "jar", "pop bottle", "pill bottle",
+        "beer bottle", "soda bottle", "container",
+        "liquid", "glass", "plastic"
     ),
     "watch" to setOf(
-        "watch", "wristwatch", "analog watch", "clock", "wrist",
-        "timepiece", "digital watch", "smartwatch", "accessory",
-        "strap", "band", "dial", "chronometer"
+        "watch", "wristwatch", "analog watch", "clock",
+        "timepiece", "digital watch", "smartwatch",
+        "chronometer", "stopwatch", "analog clock",
+        "digital clock", "strap", "wrist"
     ),
     "key" to setOf(
         "key", "keys", "key chain", "keychain", "lock",
-        "metal", "brass", "security", "door key", "car key",
-        "key ring", "padlock"
+        "door key", "car key", "key ring", "padlock",
+        "metal", "brass", "hardware", "security"
     ),
     "backpack" to setOf(
         "backpack", "bag", "luggage and bags", "rucksack",
         "handbag", "shoulder bag", "knapsack", "satchel",
-        "travel bag", "school bag", "daypack", "pack",
-        "luggage", "baggage", "carry"
+        "travel bag", "school bag", "daypack",
+        "strap", "zipper", "textile", "nylon"
     ),
     "chair" to setOf(
         "chair", "office chair", "furniture", "seat", "stool",
         "bench", "armrest", "armchair", "seating", "sofa",
         "couch", "recliner", "desk chair", "folding chair",
-        "wood"
+        "rocking chair", "barber chair",
+        "room", "interior design", "wood", "desk", "comfort"
     ),
     "door" to setOf(
-        "door", "door handle", "home door", "handle", "wood",
+        "door", "door handle", "home door", "handle",
         "entrance", "doorway", "gate", "doorknob", "hinge",
-        "frame", "threshold", "entry", "exit"
+        "sliding door", "doormat", "fixture",
+        "wood", "property", "house", "building", "wall",
+        "room", "architecture", "home", "interior design",
+        "floor", "ceiling", "hall", "real estate"
     ),
     "television" to setOf(
-        "television", "tv", "monitor", "screen", "display device",
-        "flat panel display", "led-backlit lcd display",
-        "computer monitor", "television set", "lcd tv",
-        "display", "electronic device", "entertainment",
-        "plasma", "oled", "smart tv", "flat screen"
+        "television", "tv", "flat panel display",
+        "led-backlit lcd display", "computer monitor",
+        "television set", "lcd tv",
+        "display device", "smart tv", "flat screen",
+        "screen", "monitor", "electronic device",
+        "technology", "output device", "multimedia"
     ),
     "monitor" to setOf(
-        "monitor", "computer monitor", "screen", "display device",
+        "monitor", "computer monitor", "display device",
         "flat panel display", "led-backlit lcd display",
         "output device", "television", "desktop computer",
-        "display", "lcd", "electronic device", "technology"
+        "lcd", "screen", "tv", "display",
+        "electronic device", "technology", "gadget",
+        "desk", "tableware", "multimedia"
     ),
     "mouse" to setOf(
         "mouse", "computer mouse", "input device",
-        "electronic device", "peripheral", "cursor",
+        "peripheral", "cursor",
         "pointing device", "wireless mouse", "optical mouse",
-        "trackpad", "gadget", "technology", "computing"
+        "trackpad", "computer hardware", "electronic device", "gadget"
     ),
     "keyboard" to setOf(
         "keyboard", "computer keyboard", "electronic keyboard",
-        "musical keyboard", "music keyboard", "input device",
+        "musical keyboard", "input device",
         "space bar", "numeric keypad", "peripheral",
-        "typing", "keys", "qwerty", "key", "technology",
-        "computing", "computer hardware",
-        // Coarse class that sometimes matches computer keyboards
-        "musical instrument"
+        "qwerty", "computer hardware", "typewriter keyboard",
+        "musical instrument", "technology", "electronic device"
     ),
     "scissors" to setOf(
         "scissors", "scissor", "pair of scissors", "shears",
         "cutting tool", "stationery", "office supplies", "blade",
-        "snips", "clippers", "trimmer", "tool", "craft",
-        "cut", "metal"
+        "snips", "clippers", "trimmer", "metal", "tool", "hardware"
     ),
     "phone" to setOf(
         "phone", "smartphone", "mobile phone", "cell phone",
         "cellular phone", "telephone", "mobile device",
         "communication device", "portable communications device",
-        "iphone", "android", "touchscreen", "electronic device",
-        "gadget", "technology", "screen", "display"
+        "iphone", "android", "touchscreen",
+        "cellular telephone", "dial telephone", "pay-phone",
+        "electronic device", "gadget", "technology", "screen"
     ),
     "umbrella" to setOf(
         "umbrella", "canopy", "shade", "parasol", "rain",
-        "shelter", "cover", "awning", "sunshade"
+        "shelter", "cover", "awning", "sunshade", "textile"
     ),
     "calculator" to setOf(
         "calculator", "office equipment", "office supplies",
-        "numeric keypad", "number", "electronics",
-        "electronic device", "electronic instrument",
-        "electronic engineering", "technology",
-        "office instrument", "computing", "math",
-        "arithmetic", "display", "button"
+        "numeric keypad", "electronic device",
+        "electronic instrument", "office instrument", "gadget"
     ),
     "wallet" to setOf(
-        "wallet", "purse", "billfold", "leather", "pocket",
-        "money", "cash", "card", "credit card", "id",
-        "accessory", "cardholder", "pouch", "coin purse"
+        "wallet", "purse", "billfold", "leather",
+        "cardholder", "pouch", "coin purse",
+        "accessory", "fashion", "textile"
     ),
     "refrigerator" to setOf(
         "refrigerator", "fridge", "major appliance",
         "kitchen appliance", "home appliance", "freezer",
-        "appliance", "cooler", "cold", "kitchen", "food storage"
+        "appliance", "cooler", "kitchen", "metal", "white"
     ),
     "bed" to setOf(
         "bed", "bedroom", "bed frame", "mattress", "bed sheet",
-        "pillow", "duvet", "bedding", "sleep", "blanket",
-        "comforter", "quilt", "furniture", "cushion",
-        "linen", "headboard"
+        "pillow", "duvet", "bedding", "blanket",
+        "comforter", "quilt", "cushion",
+        "linen", "headboard", "furniture",
+        "room", "textile", "comfort"
     ),
     "bicycle" to setOf(
-        "bicycle", "bike", "bicycle wheel", "cycle", "vehicle",
+        "bicycle", "bike", "bicycle wheel", "cycle",
         "cycling", "bicycle tire", "bicycle frame", "pedal",
-        "handlebar", "spoke", "chain", "gear", "wheel",
-        "mountain bike", "road bike", "bmx"
+        "handlebar", "spoke", "wheel",
+        "mountain bike", "road bike", "bmx",
+        "vehicle", "tire", "bicycle-built-for-two"
     ),
     "toilet" to setOf(
         "toilet", "plumbing fixture", "toilet seat", "bathroom",
-        "restroom", "lavatory", "commode", "wc", "flush",
-        "ceramic", "porcelain", "plumbing"
+        "restroom", "lavatory", "commode", "wc",
+        "plumbing", "toilet tissue", "ceramic", "porcelain"
     ),
     "clock" to setOf(
         "clock", "wall clock", "alarm clock", "timer", "watch",
-        "time", "timepiece", "hour", "minute", "second",
-        "dial", "analog", "digital", "chronometer"
+        "timepiece", "chronometer", "analog clock", "digital clock",
+        "time", "dial"
     ),
     "headphones" to setOf(
         "headphones", "earphones", "headset", "audio equipment",
-        "earbuds", "audio", "gadget", "music", "sound",
-        "listening", "electronic device", "wireless",
-        "bluetooth", "speaker", "ear"
+        "earbuds", "audio", "music", "sound",
+        "speaker", "helmet", "personal protective equipment",
+        "gadget", "electronic device",
+        "wire", "cable", "peripheral", "technology", "accessory",
+        "musical instrument", "mobile phone"
+    )
+)
+
+private data class TargetLabelSpec(
+    val primaryLabels: Set<String>,
+    val secondaryLabels: Set<String> = emptySet(),
+    val minimumConfidence: Float = DEFAULT_MATCH_CONFIDENCE,
+    val secondaryMinimumConfidence: Float = SECONDARY_MATCH_CONFIDENCE,
+    val tertiaryMinimumConfidence: Float = TERTIARY_MATCH_CONFIDENCE
+)
+
+private data class LabelMatchRule(
+    val requiredConfidence: Float,
+    val reason: String,
+    val priority: Int
+)
+
+private data class DetectionMatch(
+    val detectedText: String,
+    val confidence: Float,
+    val requiredConfidence: Float,
+    val reason: String,
+    val priority: Int
+)
+
+/**
+ * Labels that are too generic to ever reliably identify a specific object.
+ * These are explicitly blocked from matching ANY target, regardless of
+ * what's in the alias maps. Normalised (lowercase, stemmed) forms.
+ */
+private val NOISE_LABELS: Set<String> = setOf(
+    "pattern", "monochrome", "colorfulness", "art", "design",
+    "material property", "circle", "line",
+    "photography", "stock photography", "snapshot", "photo",
+    "sky", "space", "darkness", "shadow", "reflection",
+    "close-up", "macro photography", "still life photography",
+    "event", "person", "human", "hand", "finger", "face",
+    "number", "symbol", "logo", "brand", "label", "sign", "poster"
+)
+
+private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
+    "toothbrush" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "toothbrush", "tooth brushing", "brush",
+            "oral hygiene", "bathroom accessory", "personal care"
+        ),
+        secondaryLabels = setOf("plastic", "bathroom", "hygiene", "tool"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "sink" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "sink", "bathroom sink", "kitchen sink", "washbasin",
+            "plumbing fixture", "basin", "lavatory"
+        ),
+        secondaryLabels = setOf("faucet", "tap", "plumbing", "bathroom", "kitchen", "porcelain", "ceramic"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "coffee cup" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "coffee cup", "mug", "cup", "teacup", "espresso cup",
+            "coffee", "drinkware", "tableware"
+        ),
+        secondaryLabels = setOf("serveware", "ceramic", "porcelain", "dishware", "beverage", "liquid")
+    ),
+    "bowl" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "bowl", "mixing bowl", "tableware", "dishware"
+        ),
+        secondaryLabels = setOf("kitchenware", "serveware", "ceramic", "porcelain", "food")
+    ),
+    "shoe" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "shoe", "sneaker", "sneakers", "footwear", "boot", "running shoe",
+            "athletic shoe", "sandal", "slipper", "loafer",
+            "walking shoe", "outdoor shoe", "tennis shoe",
+            "high heel", "sports shoe"
+        ),
+        secondaryLabels = setOf("leather", "textile", "rubber", "sole")
+    ),
+    "book" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "book", "publication", "novel", "textbook", "notebook", "magazine",
+            "hardcover", "paperback", "booklet", "diary", "journal",
+            "paper product", "comic book", "book jacket", "bookcase", "text",
+            "document", "paper", "rectangle", "font"
+        ),
+        secondaryLabels = setOf("reading", "literature", "page", "cover", "library", "writing", "education")
+    ),
+    "plant" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "plant", "houseplant", "potted plant", "flower", "flowerpot",
+            "succulent", "cactus", "fern", "indoor plant",
+            "vascular plant", "leaf", "shrub", "tree",
+            "vegetation", "flora", "foliage", "herb"
+        ),
+        secondaryLabels = setOf("green", "garden", "nature", "grass", "soil")
+    ),
+    "laptop" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "laptop", "notebook computer", "netbook", "portable computer",
+            "personal computer", "computer", "output device", "computer hardware"
+        ),
+        secondaryLabels = setOf("technology", "electronic device", "gadget", "screen", "display device", "keyboard")
+    ),
+    "fruit" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "fruit", "apple", "banana", "orange", "pineapple", "mango",
+            "grape", "grapes", "berry", "strawberry", "lemon", "watermelon",
+            "pear", "peach", "kiwi", "plum", "cherry", "melon",
+            "natural foods", "produce", "citrus", "tropical fruit"
+        ),
+        secondaryLabels = setOf("food", "vegetable", "plant", "diet", "nutrition")
+    ),
+    "bottle" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "bottle", "water bottle", "plastic bottle", "glass bottle",
+            "wine bottle", "beer bottle", "soda bottle", "flask",
+            "pop bottle", "pill bottle"
+        ),
+        secondaryLabels = setOf("drinkware", "beverage can", "jar", "container", "liquid", "glass", "plastic")
+    ),
+    "watch" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "watch", "wristwatch", "analog watch", "digital watch", "smartwatch",
+            "timepiece", "chronometer", "stopwatch", "analog clock", "digital clock"
+        ),
+        secondaryLabels = setOf("clock", "strap", "wrist", "accessory"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "key" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "key", "keys", "key chain", "keychain", "key ring",
+            "door key", "car key", "padlock", "lock"
+        ),
+        secondaryLabels = setOf("metal", "brass", "hardware", "tool", "security"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "backpack" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "backpack", "rucksack", "knapsack", "school bag", "daypack",
+            "luggage and bags", "satchel", "travel bag",
+            "bag", "handbag", "shoulder bag"
+        ),
+        secondaryLabels = setOf("strap", "zipper", "textile", "nylon", "fabric")
+    ),
+    "chair" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "chair", "office chair", "armchair", "desk chair", "folding chair", "stool",
+            "furniture", "seat", "bench", "seating", "rocking chair", "barber chair"
+        ),
+        secondaryLabels = setOf("room", "interior design", "wood", "table", "desk", "comfort"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "door" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "door", "home door", "door handle", "doorway", "doorknob", "entrance door",
+            "entrance", "gate", "sliding door", "doormat", "fixture",
+            "wood", "property", "house", "building", "wall", "room"
+        ),
+        secondaryLabels = setOf("handle", "hinge", "architecture", "home", "interior design",
+            "floor", "ceiling", "hall", "corridor", "real estate"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "television" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "television", "tv", "television set", "smart tv", "lcd tv", "flat screen",
+            "flat panel display", "led-backlit lcd display",
+            "display device", "computer monitor", "screen", "monitor"
+        ),
+        secondaryLabels = setOf("electronic device", "technology", "output device", "gadget", "multimedia"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "monitor" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "monitor", "computer monitor", "display device",
+            "flat panel display", "led-backlit lcd display",
+            "output device", "desktop computer", "screen",
+            "television", "tv", "display"
+        ),
+        secondaryLabels = setOf("electronic device", "technology", "gadget", "lcd",
+            "computer", "multimedia", "desk", "tableware"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "mouse" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "mouse", "computer mouse", "wireless mouse", "optical mouse",
+            "input device", "pointing device", "trackpad"
+        ),
+        secondaryLabels = setOf("peripheral", "computer hardware", "electronic device", "gadget", "technology"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "keyboard" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "keyboard", "computer keyboard", "qwerty keyboard",
+            "numeric keypad", "keypad", "electronic keyboard",
+            "space bar", "input device", "typewriter keyboard",
+            "musical instrument", "musical keyboard"
+        ),
+        secondaryLabels = setOf("peripheral", "computer hardware", "technology", "electronic device")
+    ),
+    "scissors" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "scissors", "scissor", "pair of scissors", "shears", "cutting tool",
+            "blade", "snips", "clippers", "trimmer"
+        ),
+        secondaryLabels = setOf("stationery", "office supplies", "tool", "metal", "hardware"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "phone" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "phone", "smartphone", "mobile phone", "cell phone",
+            "cellular phone", "telephone", "mobile device",
+            "communication device", "portable communications device",
+            "cellular telephone", "dial telephone", "pay-phone"
+        ),
+        secondaryLabels = setOf("touchscreen", "electronic device", "gadget", "technology", "screen", "display device")
+    ),
+    "umbrella" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "umbrella", "parasol", "canopy"
+        ),
+        secondaryLabels = setOf("rain", "shade", "shelter", "textile")
+    ),
+    "calculator" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "calculator", "office equipment"
+        ),
+        secondaryLabels = setOf("numeric keypad", "office supplies", "electronic device", "gadget"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "wallet" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "wallet", "billfold", "cardholder", "coin purse", "purse"
+        ),
+        secondaryLabels = setOf("leather", "accessory", "fashion", "textile"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "refrigerator" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "refrigerator", "fridge", "freezer",
+            "major appliance", "kitchen appliance", "home appliance"
+        ),
+        secondaryLabels = setOf("kitchen", "appliance", "metal", "white", "cooler"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "bed" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "bed", "bed frame", "mattress", "bedding",
+            "bed sheet", "pillow", "duvet", "blanket",
+            "comforter", "quilt", "headboard"
+        ),
+        secondaryLabels = setOf("bedroom", "cushion", "linen", "furniture", "room", "textile", "comfort"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "bicycle" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "bicycle", "bike", "bicycle wheel", "bicycle frame",
+            "mountain bike", "road bike", "bmx",
+            "cycle", "cycling", "bicycle tire", "bicycle-built-for-two"
+        ),
+        secondaryLabels = setOf("pedal", "handlebar", "spoke", "wheel", "vehicle", "tire")
+    ),
+    "toilet" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "toilet", "toilet seat", "commode", "wc",
+            "plumbing fixture", "toilet tissue"
+        ),
+        secondaryLabels = setOf("bathroom", "restroom", "lavatory", "plumbing", "ceramic", "porcelain"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "clock" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "clock", "wall clock", "alarm clock", "timer",
+            "timepiece", "chronometer", "analog clock", "digital clock"
+        ),
+        secondaryLabels = setOf("watch", "time", "dial", "number")
+    ),
+    "headphones" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "headphones", "earphones", "headset", "earbuds",
+            "audio equipment", "audio", "speaker",
+            "personal protective equipment", "helmet",
+            "gadget", "electronic device"
+        ),
+        secondaryLabels = setOf("music", "sound", "wire", "cable",
+            "peripheral", "technology", "accessory",
+            "musical instrument", "mobile phone"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
     )
 )
 
 /**
- * Check whether a detected label matches the target using our alias map.
- * Falls back to normalized phrase matching if the target isn't in the map.
+ * Check whether a detected label is a target-specific match. Broad scene labels
+ * and one-word token overlap are intentionally rejected.
  */
 private fun isLabelMatch(detectedLabel: String, targetLabel: String): Boolean {
-    val detectedLower = normalizeLabel(detectedLabel)
-    val targetLower = targetLabel.lowercase().trim()
-
-    val aliases = (targetAliasMap[targetLower] ?: setOf(targetLabel))
-        .map { normalizeLabel(it) }
-        .filter { it.isNotBlank() }
-        .toSet()
-
-    // Exact normalized match first.
-    if (detectedLower in aliases) return true
-
-    // Phrase-level word boundary matching catches labels like "pair of scissors".
-    if (aliases.any { alias ->
-        containsPhrase(detectedLower, alias) || containsPhrase(alias, detectedLower)
-    }) return true
-
-    // Token overlap: if ANY single word in the detected label matches any alias word,
-    // count it. This helps when ML Kit returns compound labels like
-    // "Bathroom sink faucet" for target "sink".
-    val detectedTokens = detectedLower.split(" ").filter { it.length > 2 }.toSet()
-    val aliasTokens = aliases.flatMap { it.split(" ") }.filter { it.length > 2 }.toSet()
-    if (detectedTokens.intersect(aliasTokens).isNotEmpty()) return true
-
-    return false
+    return evaluateLabelMatch(detectedLabel, targetLabel) != null
 }
 
 private fun requiredConfidence(targetLabel: String, detectedLabel: String): Float {
-    val targetLower = targetLabel.lowercase().trim()
-    val detectedLower = normalizeLabel(detectedLabel)
+    return evaluateLabelMatch(detectedLabel, targetLabel)?.requiredConfidence
+        ?: DEFAULT_MATCH_CONFIDENCE
+}
 
-    return when {
-        targetLower == "keyboard" && detectedLower == "musical instrument" ->
-            KEYBOARD_MUSICAL_INSTRUMENT_CONFIDENCE
-        targetLower == "keyboard" -> KEYBOARD_MATCH_CONFIDENCE
-        targetLower in setOf("scissors", "key", "toothbrush", "watch", "headphones",
-            "mouse", "calculator", "wallet") ->
-            SMALL_OBJECT_MATCH_CONFIDENCE
-        targetLower in setOf("bed", "refrigerator", "door", "chair", "sink",
-            "toilet", "television", "monitor") ->
-            LARGE_OBJECT_MATCH_CONFIDENCE
-        else -> DEFAULT_MATCH_CONFIDENCE
+private fun evaluateLabelMatch(detectedLabel: String, targetLabel: String): LabelMatchRule? {
+    val detectedLower = normalizeLabel(detectedLabel)
+    val targetLower = normalizeLabel(targetLabel)
+    if (detectedLower.isBlank() || targetLower.isBlank()) return null
+
+    // Reject labels that are too generic to identify any specific object
+    if (detectedLower in NOISE_LABELS) return null
+
+    val spec = targetLabelSpecs[targetLower]
+        ?: TargetLabelSpec(primaryLabels = setOf(targetLabel), minimumConfidence = DEFAULT_MATCH_CONFIDENCE)
+
+    // Priority 3: Direct/exact primary label match
+    findMatchingAlias(detectedLower, spec.primaryLabels)?.let { alias ->
+        return LabelMatchRule(
+            requiredConfidence = confidenceForAlias(alias, spec.minimumConfidence),
+            reason = "primary:$alias",
+            priority = 3
+        )
+    }
+
+    // Priority 2: Secondary label match
+    findMatchingAlias(detectedLower, spec.secondaryLabels)?.let { alias ->
+        return LabelMatchRule(
+            requiredConfidence = spec.secondaryMinimumConfidence,
+            reason = "secondary:$alias",
+            priority = 2
+        )
+    }
+
+    // Priority 1: Broad alias map fallback (catches coarse model labels)
+    val aliasSet = targetAliasMap[targetLower]
+    if (aliasSet != null) {
+        findMatchingAlias(detectedLower, aliasSet)?.let { alias ->
+            return LabelMatchRule(
+                requiredConfidence = spec.tertiaryMinimumConfidence,
+                reason = "alias-fallback:$alias",
+                priority = 1
+            )
+        }
+    }
+
+    return null
+}
+
+private fun findMatchingAlias(detectedLabel: String, aliases: Set<String>): String? {
+    return aliases
+        .map { normalizeLabel(it) }
+        .filter { it.isNotBlank() }
+        .firstOrNull { alias ->
+            detectedLabel == alias || containsPhrase(detectedLabel, alias)
+        }
+}
+
+private fun confidenceForAlias(alias: String, baseConfidence: Float): Float {
+    val tokenCount = alias.split(" ").count { it.isNotBlank() }
+    return if (tokenCount == 1 && alias.length <= 4) {
+        maxOf(baseConfidence, SHORT_PRIMARY_LABEL_CONFIDENCE)
+    } else {
+        baseConfidence
     }
 }
 
@@ -475,7 +803,7 @@ fun ScanChallengeScreen(
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    text = "Detecting: ${detectedLabels.take(3).joinToString(", ")}",
+                                    text = "Detecting: ${detectedLabels.take(6).joinToString(", ")}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color.White.copy(alpha = 0.7f),
                                     textAlign = TextAlign.Center
@@ -798,61 +1126,52 @@ fun ScanningOverlay() {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
         label = "scanLine"
     )
 
     androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-        val scanAreaWidth = size.width * 0.8f
-        val scanAreaHeight = size.height * 0.5f
-        val scanAreaLeft = (size.width - scanAreaWidth) / 2
-        val scanAreaTop = (size.height - scanAreaHeight) / 2.5f
-
-        // Semi-transparent background
+        // Subtle dark tint over the whole screen
         drawRect(
-            color = Color.Black.copy(alpha = 0.4f),
+            color = Color.Black.copy(alpha = 0.2f),
             size = size
         )
 
-        // Clear cut out for scan area
-        drawRoundRect(
-            color = Color.Transparent,
-            topLeft = androidx.compose.ui.geometry.Offset(scanAreaLeft, scanAreaTop),
-            size = androidx.compose.ui.geometry.Size(scanAreaWidth, scanAreaHeight),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(24f, 24f),
-            blendMode = androidx.compose.ui.graphics.BlendMode.Clear
+        // Full width scanning line
+        val lineY = size.height * scanLineY
+        
+        // Glow effect
+        drawLine(
+            color = Color(0xFF4FC3F7).copy(alpha = 0.3f),
+            start = androidx.compose.ui.geometry.Offset(0f, lineY - 4f),
+            end = androidx.compose.ui.geometry.Offset(size.width, lineY - 4f),
+            strokeWidth = 8.dp.toPx()
         )
-
-        // Border for scan area
-        drawRoundRect(
-            color = Color(0xFF4FC3F7),
-            topLeft = androidx.compose.ui.geometry.Offset(scanAreaLeft, scanAreaTop),
-            size = androidx.compose.ui.geometry.Size(scanAreaWidth, scanAreaHeight),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(24f, 24f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
-        )
-
-        // Scanning line
-        val lineY = scanAreaTop + (scanAreaHeight * scanLineY)
+        
+        // Core line
         drawLine(
             color = Color(0xFF4FC3F7).copy(alpha = 0.8f),
-            start = androidx.compose.ui.geometry.Offset(scanAreaLeft + 16f, lineY),
-            end = androidx.compose.ui.geometry.Offset(scanAreaLeft + scanAreaWidth - 16f, lineY),
+            start = androidx.compose.ui.geometry.Offset(0f, lineY),
+            end = androidx.compose.ui.geometry.Offset(size.width, lineY),
             strokeWidth = 2.dp.toPx()
+        )
+        
+        // Glow effect below
+        drawLine(
+            color = Color(0xFF4FC3F7).copy(alpha = 0.3f),
+            start = androidx.compose.ui.geometry.Offset(0f, lineY + 4f),
+            end = androidx.compose.ui.geometry.Offset(size.width, lineY + 4f),
+            strokeWidth = 8.dp.toPx()
         )
     }
 }
 
 /**
- * Camera preview that runs ML Kit Image Labeling directly on each frame.
- *
- * Previously we used Object Detection as a gatekeeper before Image Labeling,
- * but the base Object Detection model only returns ~5 coarse categories and
- * frequently fails to detect many everyday objects, causing the challenge to
- * never trigger. Now we run Image Labeling directly — it's fast enough on its
- * own and provides much better coverage.
+ * Camera preview that runs ML Kit Image Labeling (bundled model) directly
+ * on each frame. The bundled model has a rich vocabulary of 400+ labels,
+ * providing reliable coverage for all the everyday objects we support.
  */
 @Composable
 fun ImageLabelingCameraPreview(
@@ -861,55 +1180,79 @@ fun ImageLabelingCameraPreview(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val cameraProviderFuture = remember(context) { ProcessCameraProvider.getInstance(context) }
+    val currentOnLabelsDetected by rememberUpdatedState(onLabelsDetected)
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+    val previewView = remember(context) {
+        PreviewView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            analysisExecutor.shutdown()
+        }
+    }
+
+    DisposableEffect(previewView, lifecycleOwner, targetLabel) {
+        val preview = Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
+
+        val imageAnalysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+
+        val analyzer = DirectImageLabelAnalyzer(targetLabel) { labels, matched, confidence ->
+            currentOnLabelsDetected(labels, matched, confidence)
+        }
+
+        imageAnalysis.setAnalyzer(analysisExecutor, analyzer)
+
+        var disposed = false
+        cameraProviderFuture.addListener({
+            if (disposed) return@addListener
+            try {
+                val cameraProvider = cameraProviderFuture.get()
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    imageAnalysis
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Camera binding failed", e)
+            }
+        }, ContextCompat.getMainExecutor(context))
+
+        onDispose {
+            disposed = true
+            imageAnalysis.clearAnalyzer()
+            analyzer.close()
+            if (cameraProviderFuture.isDone) {
+                try {
+                    cameraProviderFuture.get().unbind(preview, imageAnalysis)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Camera unbind failed", e)
+                }
+            }
+        }
+    }
 
     AndroidView(
-        factory = { ctx ->
-            PreviewView(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            }
-        },
-        modifier = Modifier.fillMaxSize(),
-        update = { previewView ->
-            cameraProviderFuture.addListener({
-                val cameraProvider = cameraProviderFuture.get()
-
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-
-                val imageAnalysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-
-                imageAnalysis.setAnalyzer(
-                    Executors.newSingleThreadExecutor(),
-                    DirectImageLabelAnalyzer(targetLabel, onLabelsDetected)
-                )
-
-                try {
-                    cameraProvider.unbindAll()
-                    cameraProvider.bindToLifecycle(
-                        lifecycleOwner,
-                        CameraSelector.DEFAULT_BACK_CAMERA,
-                        preview,
-                        imageAnalysis
-                    )
-                } catch (e: Exception) {
-                    Log.e(TAG, "Camera binding failed", e)
-                }
-            }, ContextCompat.getMainExecutor(context))
-        }
+        factory = { previewView },
+        modifier = Modifier.fillMaxSize()
     )
 }
 
 /**
- * Simplified analyzer that runs ML Kit Image Labeling directly on every frame.
- * No Object Detection gatekeeper — Image Labeling alone is sufficient and
- * provides much better coverage for the variety of objects we support.
+ * Analyzer that runs ML Kit Image Labeling (bundled model) directly on every frame.
+ * The bundled model provides specific, accurate labels for 400+ object categories.
  */
 class DirectImageLabelAnalyzer(
     private val targetLabel: String,
@@ -920,12 +1263,15 @@ class DirectImageLabelAnalyzer(
     // Our alias-map matching + multi-frame requirement handles false positives.
     private val labeler = ImageLabeling.getClient(
         ImageLabelerOptions.Builder()
-            .setConfidenceThreshold(0.03f)
+            .setConfidenceThreshold(LABELER_CANDIDATE_CONFIDENCE)
             .build()
     )
 
     @Volatile
     private var isProcessing = false
+
+    @Volatile
+    private var isClosed = false
 
     // Frame skip counter to avoid overwhelming the labeler while still
     // processing frames frequently enough for responsive detection.
@@ -934,6 +1280,11 @@ class DirectImageLabelAnalyzer(
 
     @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
+        if (isClosed) {
+            imageProxy.close()
+            return
+        }
+
         frameCounter++
 
         // Process every frame when not busy (STRATEGY_KEEP_ONLY_LATEST
@@ -954,32 +1305,50 @@ class DirectImageLabelAnalyzer(
 
         labeler.process(image)
             .addOnSuccessListener { labels ->
+                if (isClosed) return@addOnSuccessListener
+
                 val labelTexts = labels.map { "${it.text}(${"%.0f".format(it.confidence * 100)}%)" }
                 val plainLabels = labels.map { it.text }
 
-                // Log all labels for debugging (throttled to every 10th frame)
-                if (labels.isNotEmpty() && frameCounter % 10 == 0) {
-                    Log.d(TAG, "Frame #$frameCounter labels for target='$targetLabel': ${labelTexts.take(10)}")
+                // Log ALL labels every 5th frame for debugging
+                if (labels.isNotEmpty() && frameCounter % 5 == 0) {
+                    Log.d(TAG, "Frame #$frameCounter ALL labels for target='$targetLabel': $labelTexts")
                 }
 
-                // Check all matching labels and keep the strongest one.
+                // Check all target-specific labels that also clear their required threshold.
                 val match = labels
-                    .filter { label -> isLabelMatch(label.text, targetLabel) }
-                    .maxByOrNull { it.confidence }
+                    .mapNotNull { label ->
+                        val rule = evaluateLabelMatch(label.text, targetLabel)
+                            ?: return@mapNotNull null
+                        DetectionMatch(
+                            detectedText = label.text,
+                            confidence = label.confidence,
+                            requiredConfidence = rule.requiredConfidence,
+                            reason = rule.reason,
+                            priority = rule.priority
+                        )
+                    }
+                    .filter { candidate -> candidate.confidence >= candidate.requiredConfidence }
+                    .maxWithOrNull(
+                        compareBy<DetectionMatch> { it.priority }
+                            .thenBy { it.confidence }
+                    )
 
-                // Apply target-specific confidence thresholds.
-                val matched = match != null &&
-                    match.confidence >= requiredConfidence(targetLabel, match.text)
+                val matched = match != null
 
-                if (matched) {
+                if (match != null) {
                     Log.d(TAG, "MATCH FOUND: target='$targetLabel', " +
-                            "detected='${match!!.text}', confidence=${match.confidence}, " +
-                            "all labels=${labelTexts.take(8)}")
+                            "detected='${match.detectedText}', " +
+                            "confidence=${match.confidence}, " +
+                            "required=${match.requiredConfidence}, " +
+                            "reason=${match.reason}, all labels=${labelTexts.take(8)}")
                 }
 
                 onResult(plainLabels, matched, match?.confidence ?: 0f)
             }
             .addOnFailureListener { e ->
+                if (isClosed) return@addOnFailureListener
+
                 Log.e(TAG, "Image labeling failed", e)
                 onResult(emptyList(), false, 0f)
             }
@@ -987,5 +1356,10 @@ class DirectImageLabelAnalyzer(
                 isProcessing = false
                 imageProxy.close()
             }
+    }
+
+    fun close() {
+        isClosed = true
+        labeler.close()
     }
 }

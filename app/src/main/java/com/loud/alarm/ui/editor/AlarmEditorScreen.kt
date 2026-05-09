@@ -162,6 +162,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.loud.alarm.billing.BillingViewModel
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.MathDifficulty
+import com.loud.alarm.data.SquatDetectionMode
 import com.loud.alarm.ui.challenge.CameraPreview
 import com.loud.alarm.ui.challenge.ScannerOverlay
 import com.loud.alarm.ui.theme.*
@@ -303,17 +304,7 @@ fun AlarmEditorScreen(
                     },
                     actions = {
                         TextButton(onClick = {
-                            val requiresSinkPhoto =
-                                uiState.challengeTypes.contains(ChallengeType.SCAN_SINK) &&
-                                    uiState.sinkImageUri.isNullOrBlank()
-                            if (requiresSinkPhoto) {
-                                Toast.makeText(
-                                    context,
-                                    "Add a sink photo to save this alarm.",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                return@TextButton
-                            }
+
                             val activeChallengeCount = uiState.challengeTypes.count { it != ChallengeType.NONE }
                             if (!isSubscribed && activeChallengeCount > FREE_CHALLENGE_LIMIT) {
                                 Toast.makeText(
@@ -589,10 +580,9 @@ fun AlarmEditorScreen(
                                 if (i + j < challengeOptions.size) {
                                     val (type, extraArgs) = challengeOptions[i + j]
                                     val (icon, title, iconColor) = extraArgs
-                                    val isComingSoon = type == ChallengeType.PUSH_UP
                                     val selected = uiState.challengeTypes.contains(type)
                                     val requiresSubscription = type in premiumChallengeTypes
-                                    val isLocked = requiresSubscription && !isSubscribed && !selected && !isComingSoon
+                                    val isLocked = requiresSubscription && !isSubscribed && !selected
                                     val maxActiveChallenges = if (isSubscribed) Int.MAX_VALUE else FREE_CHALLENGE_LIMIT
 
                                     Box(
@@ -609,15 +599,14 @@ fun AlarmEditorScreen(
                                                 shape = RoundedCornerShape(12.dp)
                                             )
                                             .clickable {
-                                                if (isComingSoon && !selected) {
-                                                    Toast.makeText(context, "Coming soon", Toast.LENGTH_SHORT).show()
-                                                } else if (isLocked && !isComingSoon) {
+                                                if (isLocked) {
                                                     onNavigateToSubscription()
                                                 } else {
                                                     val cameraChallenges = setOf(
                                                         ChallengeType.QR_CODE,
                                                         ChallengeType.SCAN_SINK,
-                                                        ChallengeType.SCAN_OBJECT
+                                                        ChallengeType.SCAN_OBJECT,
+                                                        ChallengeType.PUSH_UP
                                                     )
                                                     
                                                     if (type in cameraChallenges && !cameraPermissionState.status.isGranted) {
@@ -679,7 +668,7 @@ fun AlarmEditorScreen(
                                                     Icon(
                                                         imageVector = icon,
                                                         contentDescription = title,
-                                                        tint = if (selected) MaterialTheme.colorScheme.primary else (if (isComingSoon) iconColor.copy(alpha = 0.75f) else iconColor),
+                                                        tint = if (selected) MaterialTheme.colorScheme.primary else iconColor,
                                                         modifier = Modifier.size(24.dp)
                                                     )
                                                 }
@@ -700,16 +689,8 @@ fun AlarmEditorScreen(
                                                 text = title,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selected) MaterialTheme.colorScheme.primary else (if (isComingSoon) Color.White.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.9f))
+                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f)
                                             )
-                                            if (isComingSoon) {
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(
-                                                    text = "Coming Soon",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                                    color = iconColor.copy(alpha = 0.8f)
-                                                )
-                                            }
                                         }
                                     }
                                 } else {
@@ -840,6 +821,47 @@ fun AlarmEditorScreen(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        // ──────────────────────────────────────────────────
+                        // Math Question Count
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Number of Questions", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val mathQuestionOptions = listOf(1, 2, 3, 5, 10)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            mathQuestionOptions.forEach { count ->
+                                val isSelected = uiState.mathQuestionCount == count
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.updateMathQuestionCount(count) }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (count == 1) "$count question" else "$count questions",
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 }
                             }
                         }
@@ -1049,6 +1071,169 @@ fun AlarmEditorScreen(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                    // ──────────────────────────────────────────────────
+                    // Memory Challenge settings
+                    if (uiState.challengeTypes.contains(ChallengeType.MEMORY)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Memory Difficulty", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.animateContentSize()
+                        ) {
+                            MathDifficulty.values().forEach { diff ->
+                                val selected = diff == uiState.memoryDifficulty
+                                val (description, detail) = when (diff) {
+                                    MathDifficulty.EASY -> "3×3 grid — 3 tile sequence" to "Warm-up level"
+                                    MathDifficulty.MEDIUM -> "3×3 grid — 4 tile sequence" to "Getting tricky"
+                                    MathDifficulty.HARD -> "4×4 grid — 5 tile sequence" to "Serious focus needed"
+                                    MathDifficulty.EXTREME -> "4×4 grid — 6 tile sequence" to "Maximum brain strain"
+                                }
+
+                                val scale by animateFloatAsState(
+                                    targetValue = if (selected) 1.02f else 1.0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    ),
+                                    label = "scale"
+                                )
+                                val bgColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+                                    label = "bgColor"
+                                )
+                                val borderColor by animateColorAsState(
+                                    targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                    label = "borderColor"
+                                )
+                                val dotSize by animateDpAsState(
+                                    targetValue = if (selected) 12.dp else 8.dp,
+                                    label = "dotSize"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .fillMaxWidth()
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
+                                        .clickable { viewModel.updateMemoryDifficulty(diff) }
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(bgColor)
+                                        .border(
+                                            width = if (selected) 2.dp else 1.dp,
+                                            color = borderColor,
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .size(dotSize)
+                                                .clip(CircleShape)
+                                                .background(if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f))
+                                        )
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                diff.name,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+                                                letterSpacing = 1.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.7f)
+                                            )
+
+                                            AnimatedVisibility(
+                                                visible = selected,
+                                                enter = expandVertically(
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                                        stiffness = Spring.StiffnessLow
+                                                    )
+                                                ) + fadeIn(),
+                                                exit = shrinkVertically() + fadeOut()
+                                            ) {
+                                                Column(modifier = Modifier.fillMaxWidth()) {
+                                                    Spacer(modifier = Modifier.height(10.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .background(Color.Black.copy(alpha = 0.3f))
+                                                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                                            .padding(12.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            detail,
+                                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                letterSpacing = 0.5.sp
+                                                            ),
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            textAlign = TextAlign.Center
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ──────────────────────────────────────────────────
+                        // Memory Challenge Count
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Number of Rounds", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val memoryRoundOptions = listOf(1, 2, 3, 5)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            memoryRoundOptions.forEach { count ->
+                                val isSelected = uiState.memoryChallengeCount == count
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.updateMemoryChallengeCount(count) }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (count == 1) "$count round" else "$count rounds",
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 }
                             }
                         }
@@ -1270,6 +1455,68 @@ fun AlarmEditorScreen(
                     // ──────────────────────────────────────────────────
                     if (uiState.challengeTypes.contains(ChallengeType.SQUAT)) {
                         Spacer(modifier = Modifier.height(16.dp))
+                        Text("Squat Method", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val squatModeOptions = listOf(
+                                SquatDetectionMode.CAMERA to Triple(Icons.Default.CameraAlt, "Camera", "Pose tracking"),
+                                SquatDetectionMode.MOTION to Triple(Icons.Default.Smartphone, "Motion", "Hold phone (less reliable)")
+                            )
+                            squatModeOptions.forEach { (mode, details) ->
+                                val (icon, title, subtitle) = details
+                                val isSelected = uiState.squatDetectionMode == mode
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            viewModel.updateSquatDetectionMode(mode)
+                                            if (mode == SquatDetectionMode.CAMERA && !cameraPermissionState.status.isGranted) {
+                                                cameraPermissionState.launchPermissionRequest()
+                                            }
+                                        }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = title,
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = title,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        Text(
+                                            text = subtitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                                else Color.White.copy(alpha = 0.6f),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text("Squat Target", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1398,118 +1645,95 @@ fun AlarmEditorScreen(
                         Text("Scan Sink Setup", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(8.dp))
                         var showSinkCameraDialog by remember { mutableStateOf(false) }
+                        val isAnySink = uiState.sinkImageUri.isNullOrBlank()
 
-                        Column {
-                            Text(
-                                "Take a photo of your sink so we know what to look for!",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            if (uiState.sinkImageUri != null) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                                        .border(
-                                            width = 1.dp,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .padding(14.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Default.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    "Sink image captured",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                            Text(
-                                                "Point your camera at your sink to dismiss",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color.White.copy(alpha = 0.6f)
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color.White.copy(alpha = 0.1f))
-                                            .clickable { showSinkCameraDialog = true }
-                                            .padding(vertical = 10.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("Retake Photo", color = Color.White, style = MaterialTheme.typography.labelMedium)
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
-                                            .clickable { viewModel.updateSinkImageUri(null) }
-                                            .padding(vertical = 10.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("Remove", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
-                                    }
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color.White.copy(alpha = 0.1f))
-                                        .border(
-                                            width = 1.dp,
-                                            color = Color.White.copy(alpha = 0.2f),
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .clickable { showSinkCameraDialog = true }
-                                        .padding(vertical = 24.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(
-                                            imageVector = Icons.Default.Wash,
-                                            contentDescription = "Sink",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            "Tap to add photo of your sink",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color.White.copy(alpha = 0.8f)
-                                        )
-                                        Text(
-                                            "Required to enable this challenge",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                                        )
-                                    }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Any Sink
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { viewModel.updateSinkImageUri(null) }
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isAnySink) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else Color.White.copy(alpha = 0.1f)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isAnySink) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.Wash,
+                                        contentDescription = "Any Sink",
+                                        tint = if (isAnySink) MaterialTheme.colorScheme.primary else Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Any Sink",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (isAnySink) MaterialTheme.colorScheme.primary else Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
                             }
+
+                            // Specific Sink
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { showSinkCameraDialog = true }
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (!isAnySink) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else Color.White.copy(alpha = 0.1f)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (!isAnySink) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.GpsFixed,
+                                        contentDescription = "Specific Sink",
+                                        tint = if (!isAnySink) MaterialTheme.colorScheme.primary else Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Specific Sink",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (!isAnySink) MaterialTheme.colorScheme.primary else Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (isAnySink) {
+                            Text(
+                                "Scan any sink to dismiss alarm",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        } else {
+                            Text(
+                                "Required to match specific sink photo",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
                         }
 
                         if (showSinkCameraDialog) {
@@ -1534,6 +1758,31 @@ fun AlarmEditorScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.7f)
                         )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(IconAmber.copy(alpha = 0.15f))
+                                .border(1.dp, IconAmber.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = "Warning",
+                                tint = IconAmber,
+                                modifier = Modifier.size(20.dp).padding(top = 2.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "Object scanning is in development and some objects might not scan properly. If this happens, a fallback option to solve a math problem will be provided to dismiss the alarm.",
+                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(8.dp))
 
                         val objectOptions = listOf(

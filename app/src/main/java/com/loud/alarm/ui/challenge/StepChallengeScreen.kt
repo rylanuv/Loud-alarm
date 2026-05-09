@@ -37,29 +37,20 @@ import kotlin.math.sqrt
 
 private const val TAG = "StepChallenge"
 
-// ── Hardware step-detector cadence validation ──
-// Real walking cadence: roughly 1 step every 400-1200 ms.
-// Shaking is much faster (~50-200 ms between events) or very erratic.
-private const val HW_MIN_STEP_INTERVAL_MS = 300L
-private const val HW_MAX_STEP_INTERVAL_MS = 2000L
-// We buffer N recent intervals and require low variance (regular rhythm)
-private const val HW_CADENCE_BUFFER_SIZE = 4
-private const val HW_MAX_CADENCE_CV = 0.60f // coefficient of variation (stdDev / mean)
+// ── Hardware step-detector fallback debouncing ──
+private const val HW_MIN_STEP_INTERVAL_MS = 250L
 
 // ── Accelerometer fallback constants ──
 private const val GRAVITY_ALPHA = 0.8f
 private const val MAGNITUDE_SMOOTHING_ALPHA = 0.65f
-// Higher thresholds → harder to trigger with small shakes
-private const val STEP_UPPER_THRESHOLD = 1.8f
+// Moderated thresholds for more reliable step detection
+private const val STEP_UPPER_THRESHOLD = 1.2f
 private const val STEP_LOWER_THRESHOLD = 0.5f
-private const val MIN_STEP_INTERVAL_MS = 350L
-private const val MAX_STEP_INTERVAL_MS = 2000L
+private const val MIN_STEP_INTERVAL_MS = 250L
 private const val ACCEL_WARMUP_MS = 600L
-private const val PEAK_TO_VALLEY_TIMEOUT_MS = 800L
-// Require the gravity-aligned axis to carry most of the acceleration (walking = vertical bounce)
-private const val GRAVITY_AXIS_RATIO_MIN = 0.45f
-// Number of consecutive valid peak-valley cycles before we start counting steps
-private const val ACCEL_PRIME_CYCLES = 2
+private const val PEAK_TO_VALLEY_TIMEOUT_MS = 1000L
+// Require the gravity-aligned axis to carry some of the acceleration (walking = vertical bounce)
+private const val GRAVITY_AXIS_RATIO_MIN = 0.2f
 
 @Composable
 fun StepChallengeScreen(
@@ -87,11 +78,7 @@ fun StepChallengeScreen(
         val listener: SensorEventListener
 
         if (useHardwareDetector) {
-            // ── Hardware step detector with cadence validation ──
-            // Even TYPE_STEP_DETECTOR can fire on rhythmic shakes.
-            // We buffer recent inter-step intervals and only accept a step when the
-            // cadence is consistent with real walking.
-            val intervalBuffer = ArrayDeque<Long>(HW_CADENCE_BUFFER_SIZE)
+            // ── Hardware step detector with simple debouncing ──
             var lastHwStepMs = 0L
 
             listener = object : SensorEventListener {
@@ -100,43 +87,15 @@ fun StepChallengeScreen(
 
                     val nowMs = System.currentTimeMillis()
 
-                    if (lastHwStepMs != 0L) {
-                        val interval = nowMs - lastHwStepMs
-
-                        // Reject steps that are impossibly fast (shaking) or too slow
-                        if (interval < HW_MIN_STEP_INTERVAL_MS || interval > HW_MAX_STEP_INTERVAL_MS) {
-                            Log.d(TAG, "HW step rejected: interval=${interval}ms out of range")
-                            // Reset the buffer on an out-of-range interval
-                            intervalBuffer.clear()
-                            lastHwStepMs = nowMs
-                            return
-                        }
-
-                        intervalBuffer.addLast(interval)
-                        if (intervalBuffer.size > HW_CADENCE_BUFFER_SIZE) intervalBuffer.removeFirst()
+                    // Basic debounce to prevent rapid shake triggering, while relying 
+                    // on the OS hardware detector for actual cadence and filtering
+                    if (lastHwStepMs == 0L || (nowMs - lastHwStepMs) >= HW_MIN_STEP_INTERVAL_MS) {
+                        currentSteps += 1
+                        lastHwStepMs = nowMs
+                        Log.d(TAG, "HW step detected, total=$currentSteps")
+                    } else {
+                        Log.d(TAG, "HW step rejected: debounced")
                     }
-
-                    lastHwStepMs = nowMs
-
-                    // Need enough samples to validate cadence
-                    if (intervalBuffer.size < HW_CADENCE_BUFFER_SIZE) {
-                        Log.d(TAG, "HW step buffering (${intervalBuffer.size}/$HW_CADENCE_BUFFER_SIZE)")
-                        return
-                    }
-
-                    // Check cadence regularity: coefficient of variation
-                    val mean = intervalBuffer.average()
-                    val variance = intervalBuffer.map { (it - mean) * (it - mean) }.average()
-                    val stdDev = sqrt(variance)
-                    val cv = (stdDev / mean).toFloat()
-
-                    if (cv > HW_MAX_CADENCE_CV) {
-                        Log.d(TAG, "HW step rejected: irregular cadence cv=%.2f (max=%.2f)".format(cv, HW_MAX_CADENCE_CV))
-                        return
-                    }
-
-                    currentSteps += 1
-                    Log.d(TAG, "HW step accepted, cv=%.2f, total=$currentSteps".format(cv))
                 }
 
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -156,8 +115,6 @@ fun StepChallengeScreen(
             var accelStartTimestampMs = 0L
             // Track the gravity-axis component of acceleration at the peak
             var peakGravityAxisRatio = 0f
-            // Consecutive valid cycles before we start counting
-            var primeCyclesRemaining = ACCEL_PRIME_CYCLES
 
             listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent?) {
@@ -208,24 +165,18 @@ fun StepChallengeScreen(
                         if (smoothedMagnitude < STEP_LOWER_THRESHOLD) {
                             val interval = nowMs - lastStepTimestampMs
 
-                            // Validate: interval in walking range & acceleration was mostly vertical
-                            val intervalValid = lastStepTimestampMs == 0L ||
-                                (interval in MIN_STEP_INTERVAL_MS..MAX_STEP_INTERVAL_MS)
+                            // Validate: interval not too fast (debounce) & acceleration was mostly vertical
+                            val intervalValid = lastStepTimestampMs == 0L || interval >= MIN_STEP_INTERVAL_MS
                             val axisValid = peakGravityAxisRatio >= GRAVITY_AXIS_RATIO_MIN
 
                             if (intervalValid && axisValid) {
-                                if (primeCyclesRemaining > 0) {
-                                    primeCyclesRemaining--
-                                    Log.d(TAG, "Accel priming (${ACCEL_PRIME_CYCLES - primeCyclesRemaining}/$ACCEL_PRIME_CYCLES)")
-                                } else {
-                                    currentSteps += 1
-                                    Log.d(TAG, "Accel step detected, gravRatio=%.2f, total=$currentSteps".format(peakGravityAxisRatio))
-                                }
+                                currentSteps += 1
+                                Log.d(TAG, "Accel step detected, gravRatio=%.2f, total=$currentSteps".format(peakGravityAxisRatio))
                                 lastStepTimestampMs = nowMs
+                            } else if (!intervalValid) {
+                                Log.d(TAG, "Accel step rejected: interval too fast (${interval}ms)")
                             } else {
-                                Log.d(TAG, "Accel step rejected: intervalValid=$intervalValid, axisValid=$axisValid (ratio=%.2f)".format(peakGravityAxisRatio))
-                                // Reset priming on invalid pattern (likely shaking)
-                                primeCyclesRemaining = ACCEL_PRIME_CYCLES
+                                Log.d(TAG, "Accel step rejected: bad axis (ratio=%.2f)".format(peakGravityAxisRatio))
                             }
                             waitingForValley = false
                         } else if (nowMs - peakTimestampMs > PEAK_TO_VALLEY_TIMEOUT_MS) {

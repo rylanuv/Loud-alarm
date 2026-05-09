@@ -51,6 +51,12 @@ class SettingsViewModel @Inject constructor(
     val vibrationPattern: StateFlow<String> = settingsRepository.vibrationPattern
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), VibrationPattern.DEVICE_DEFAULT.name)
 
+    val isDevModeEnabled: StateFlow<Boolean> = settingsRepository.isDevModeEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val skeletonOverlayEnabled: StateFlow<Boolean> = settingsRepository.skeletonOverlayEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     fun setVibrationEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setVibrationEnabled(enabled)
@@ -107,5 +113,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setDevModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDevModeEnabled(enabled)
+        }
+    }
 
+    fun setSkeletonOverlayEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSkeletonOverlayEnabled(enabled)
+        }
+    }
 }

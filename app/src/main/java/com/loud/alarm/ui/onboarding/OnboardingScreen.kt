@@ -1,5 +1,6 @@
 package com.loud.alarm.ui.onboarding
 
+import android.Manifest
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +37,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -149,7 +153,7 @@ fun OnboardingScreen(
                     )
                     3 -> PermissionSetupPage(
                         title = "Enable required permissions",
-                        description = "Tap each item once and make sure they all show On.",
+                        description = "Two quick setup items help alarms stay reliable.",
                         isVisible = true
                     )
                     else -> ReadyPage(
@@ -369,11 +373,14 @@ private fun WakeTimePage(
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 private fun ChallengePage(
     selected: Set<ChallengeType>,
     onSelect: (ChallengeType) -> Unit
 ) {
+    val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+
     Column(modifier = Modifier.padding(top = 64.dp)) {
         Text(
             text = "Pick your challenge",
@@ -406,7 +413,12 @@ private fun ChallengePage(
                 Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = Color.White)
             },
             selected = selected.contains(ChallengeType.QR_CODE),
-            onClick = { onSelect(ChallengeType.QR_CODE) }
+            onClick = {
+                if (!cameraPermissionState.status.isGranted) {
+                    cameraPermissionState.launchPermissionRequest()
+                }
+                onSelect(ChallengeType.QR_CODE)
+            }
         )
         Spacer(modifier = Modifier.height(10.dp))
         FreeChallengeItem(
@@ -936,6 +948,16 @@ private fun MorningPathCard(
     progress: Float,
     isPositive: Boolean
 ) {
+    val cardHeight = 200.dp
+    val cardHorizontalPadding = 12.dp
+    val cardVerticalPadding = 15.dp
+    val nodeSize = 32.dp
+    val nodeIconSize = 16.dp
+    val pathLineWidth = 3.dp
+    val pathLineX = cardHorizontalPadding + (nodeSize / 2) - (pathLineWidth / 2)
+    val pathLineTop = cardVerticalPadding + (nodeSize / 2)
+    val pathLineHeight = cardHeight - (cardVerticalPadding * 2) - nodeSize
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -943,7 +965,7 @@ private fun MorningPathCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
+                .height(cardHeight)
                 .clip(RoundedCornerShape(24.dp))
                 .background(Color.Black.copy(alpha = 0.22f))
                 .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(24.dp))
@@ -951,10 +973,10 @@ private fun MorningPathCard(
             // Path Line
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 24.dp)
-                    .width(3.dp)
-                    .height(130.dp)
+                    .align(Alignment.TopStart)
+                    .padding(start = pathLineX, top = pathLineTop)
+                    .width(pathLineWidth)
+                    .height(pathLineHeight)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.12f))
             )
@@ -963,9 +985,9 @@ private fun MorningPathCard(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = 24.dp, top = 35.dp)
-                    .width(3.dp)
-                    .height(130.dp * progress)
+                    .padding(start = pathLineX, top = pathLineTop)
+                    .width(pathLineWidth)
+                    .height(pathLineHeight * progress)
                     .clip(CircleShape)
                     .background(
                         Brush.verticalGradient(
@@ -980,7 +1002,7 @@ private fun MorningPathCard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(vertical = 15.dp, horizontal = 12.dp),
+                    .padding(vertical = cardVerticalPadding, horizontal = cardHorizontalPadding),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 repeat(3) { index ->
@@ -995,8 +1017,8 @@ private fun MorningPathCard(
                             tint = if (index == 2 && !isPositive) Color(0xFFFF7C6D)
                                    else if (index == 2 && isPositive) Color(0xFF65F0BE)
                                    else accent,
-                            size = 32.dp,
-                            iconSize = 16.dp
+                            size = nodeSize,
+                            iconSize = nodeIconSize
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(

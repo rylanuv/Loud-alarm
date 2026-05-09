@@ -3,8 +3,10 @@ package com.loud.alarm.ui.alarm
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.loud.alarm.analytics.AnalyticsLogger
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.AlarmRepository
+import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,7 +22,8 @@ import javax.inject.Inject
 class AlarmActiveViewModel @Inject constructor(
     private val repository: AlarmRepository,
     private val scheduler: com.loud.alarm.service.AlarmScheduler,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val analyticsLogger: AnalyticsLogger
 ) : ViewModel() {
     companion object {
         private const val TAG = "AlarmActiveViewModel"
@@ -43,6 +46,10 @@ class AlarmActiveViewModel @Inject constructor(
                     _loadError.value = "Alarm not found"
                 } else {
                     _alarm.value = loaded
+                    analyticsLogger.logAlarmTriggered(
+                        challengeCount = loaded.analyticsChallengeCount(),
+                        wakeUpCheckMinutes = loaded.wakeUpCheckMinutes
+                    )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load alarm id=$id", e)
@@ -58,7 +65,22 @@ class AlarmActiveViewModel @Inject constructor(
             // Schedule the same alarm to fire again after the snooze duration.
             // No new alarm is created — we just re-schedule the existing one.
             scheduler.scheduleSnooze(alarm, minutes)
+            analyticsLogger.logAlarmSnoozed(
+                minutes = minutes,
+                challengeCount = alarm.analyticsChallengeCount()
+            )
             Log.d(TAG, "Snoozed alarm ${alarm.id} for $minutes minutes")
         }
+    }
+
+    fun logAlarmDismissed(alarm: Alarm) {
+        analyticsLogger.logAlarmDismissed(
+            challengeCount = alarm.analyticsChallengeCount(),
+            wakeUpCheckMinutes = alarm.wakeUpCheckMinutes
+        )
+    }
+
+    private fun Alarm.analyticsChallengeCount(): Int {
+        return challengeTypes.count { it != ChallengeType.NONE }
     }
 }

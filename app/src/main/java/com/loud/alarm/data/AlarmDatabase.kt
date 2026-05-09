@@ -4,7 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Alarm::class], version = 15, exportSchema = false)
+@Database(entities = [Alarm::class], version = 19, exportSchema = false)
 @TypeConverters(AlarmTypeConverters::class)
 abstract class AlarmDatabase : RoomDatabase() {
     abstract fun alarmDao(): AlarmDao

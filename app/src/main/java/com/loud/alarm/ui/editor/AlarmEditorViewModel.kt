@@ -3,10 +3,12 @@ package com.loud.alarm.ui.editor
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.loud.alarm.analytics.AnalyticsLogger
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.AlarmRepository
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.MathDifficulty
+import com.loud.alarm.data.SquatDetectionMode
 import com.loud.alarm.service.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +22,7 @@ import javax.inject.Inject
 class AlarmEditorViewModel @Inject constructor(
     private val repository: AlarmRepository,
     private val scheduler: AlarmScheduler,
+    private val analyticsLogger: AnalyticsLogger,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -70,11 +73,15 @@ class AlarmEditorViewModel @Inject constructor(
                     stepCount = alarm.stepCount,
                     shakeCount = alarm.shakeCount,
                     squatCount = alarm.squatCount,
+                    squatDetectionMode = alarm.squatDetectionMode,
                     pushUpCount = alarm.pushUpCount,
                     reverseTypingCount = alarm.reverseTypingCount,
+                    mathQuestionCount = alarm.mathQuestionCount,
                     sinkImageUri = alarm.sinkImageUri,
                     scanObjectLabel = alarm.scanObjectLabel,
                     scanObjectExcluded = alarm.scanObjectExcluded,
+                    memoryDifficulty = alarm.memoryDifficulty,
+                    memoryChallengeCount = alarm.memoryChallengeCount,
                     timePickerVersion = _uiState.value.timePickerVersion + 1
                 )
             }
@@ -175,12 +182,28 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(squatCount = count)
     }
 
+    fun updateSquatDetectionMode(mode: SquatDetectionMode) {
+        _uiState.value = _uiState.value.copy(squatDetectionMode = mode)
+    }
+
     fun updatePushUpCount(count: Int) {
         _uiState.value = _uiState.value.copy(pushUpCount = count)
     }
 
     fun updateReverseTypingCount(count: Int) {
         _uiState.value = _uiState.value.copy(reverseTypingCount = count)
+    }
+
+    fun updateMathQuestionCount(count: Int) {
+        _uiState.value = _uiState.value.copy(mathQuestionCount = count)
+    }
+
+    fun updateMemoryDifficulty(difficulty: MathDifficulty) {
+        _uiState.value = _uiState.value.copy(memoryDifficulty = difficulty)
+    }
+
+    fun updateMemoryChallengeCount(count: Int) {
+        _uiState.value = _uiState.value.copy(memoryChallengeCount = count)
     }
 
     fun updateSinkImageUri(uri: String?) {
@@ -200,6 +223,7 @@ class AlarmEditorViewModel @Inject constructor(
     fun saveAlarm(onSaved: () -> Unit) {
         viewModelScope.launch {
             val state = _uiState.value
+            val isNewAlarm = currentAlarmId == null || currentAlarmId == 0
             val alarm = Alarm(
                 id = currentAlarmId ?: 0,
                 hour = state.hour,
@@ -218,21 +242,31 @@ class AlarmEditorViewModel @Inject constructor(
                 stepCount = state.stepCount,
                 shakeCount = state.shakeCount,
                 squatCount = state.squatCount,
+                squatDetectionMode = state.squatDetectionMode,
                 pushUpCount = state.pushUpCount,
                 reverseTypingCount = state.reverseTypingCount,
+                mathQuestionCount = state.mathQuestionCount,
                 sinkImageUri = state.sinkImageUri,
                 scanObjectLabel = state.scanObjectLabel,
                 scanObjectExcluded = state.scanObjectExcluded,
+                memoryDifficulty = state.memoryDifficulty,
+                memoryChallengeCount = state.memoryChallengeCount,
                 enabled = true
             )
 
-            if (currentAlarmId == null || currentAlarmId == 0) {
+            if (isNewAlarm) {
                 val newId = repository.insert(alarm)
                 scheduler.schedule(alarm.copy(id = newId.toInt()))
             } else {
                 repository.update(alarm)
                 scheduler.schedule(alarm)
             }
+            analyticsLogger.logAlarmSaved(
+                isNewAlarm = isNewAlarm,
+                challengeCount = state.challengeTypes.count { it != ChallengeType.NONE },
+                isRepeating = state.daysOfWeek.isNotEmpty(),
+                wakeUpCheckMinutes = state.wakeUpCheckMinutes
+            )
             onSaved()
         }
     }
@@ -254,11 +288,15 @@ data class AlarmUiState(
     val stepCount: Int = 30,
     val shakeCount: Int = 30,
     val squatCount: Int = 15,
+    val squatDetectionMode: SquatDetectionMode = SquatDetectionMode.CAMERA,
     val pushUpCount: Int = 15,
     val reverseTypingCount: Int = 3,
+    val mathQuestionCount: Int = 1,
     val sinkImageUri: String? = null,
-    val scanObjectLabel: String = "",
+    val scanObjectLabel: String = "RANDOM",
     val scanObjectExcluded: Set<String> = emptySet(),
     val puzzleDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val memoryDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val memoryChallengeCount: Int = 3,
     val timePickerVersion: Int = 0
 )

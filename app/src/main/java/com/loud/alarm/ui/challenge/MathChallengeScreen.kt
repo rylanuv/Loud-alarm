@@ -42,15 +42,37 @@ import com.loud.alarm.data.MathDifficulty
 @Composable
 fun MathChallengeScreen(
     difficulty: MathDifficulty,
+    questionCount: Int = 1,
     onSuccess: () -> Unit
 ) {
+    var currentQuestion by remember { mutableStateOf(1) }
     var problem by remember { mutableStateOf(MathProblemGenerator.generateProblem(difficulty)) }
     var input by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
+    var isCorrect by remember { mutableStateOf(false) }
+
+    // Auto-advance to next question after correct flash
+    LaunchedEffect(isCorrect) {
+        if (isCorrect) {
+            kotlinx.coroutines.delay(400)
+            if (currentQuestion >= questionCount) {
+                onSuccess()
+            } else {
+                currentQuestion++
+                problem = MathProblemGenerator.generateProblem(difficulty)
+                input = ""
+                isCorrect = false
+            }
+        }
+    }
 
     // Provide feedback via color
     val backgroundColor by animateColorAsState(
-        targetValue = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.background,
+        targetValue = when {
+            isCorrect -> Color(0xFF1B5E20).copy(alpha = 0.3f)
+            isError -> MaterialTheme.colorScheme.errorContainer
+            else -> MaterialTheme.colorScheme.background
+        },
         animationSpec = tween(300), 
         label = "bgColor"
     )
@@ -70,6 +92,35 @@ fun MathChallengeScreen(
 
             // Problem Display
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Progress indicator
+                if (questionCount > 1) {
+                    Text(
+                        text = "Question $currentQuestion / $questionCount",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Progress bar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(currentQuestion.toFloat() / questionCount.toFloat())
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 Text(
                     text = "Solve to Dismiss",
                     style = MaterialTheme.typography.titleMedium,
@@ -104,25 +155,27 @@ fun MathChallengeScreen(
             // Keypad
             NumericKeypad(
                 onNumberClick = { num ->
-                    if (input.length < 6) {
+                    if (input.length < 6 && !isCorrect) {
                         input += num
                         isError = false
                     }
                 },
                 onDeleteClick = {
-                    if (input.isNotEmpty()) {
+                    if (input.isNotEmpty() && !isCorrect) {
                         input = input.dropLast(1)
                         isError = false
                     }
                 },
                 onEnterClick = {
-                    if (input == problem.answer.toString()) {
-                        // Correct answer!
-                        onSuccess()
-                    } else if (input.isNotEmpty()) {
-                        // Wrong answer - clear and show error feedback
-                        isError = true
-                        input = ""
+                    if (!isCorrect) {
+                        if (input == problem.answer.toString()) {
+                            // Correct answer!
+                            isCorrect = true
+                        } else if (input.isNotEmpty()) {
+                            // Wrong answer - clear and show error feedback
+                            isError = true
+                            input = ""
+                        }
                     }
                 }
             )

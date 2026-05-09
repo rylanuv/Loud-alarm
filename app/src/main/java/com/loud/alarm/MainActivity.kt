@@ -24,8 +24,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.loud.alarm.analytics.AnalyticsLogger
 import com.loud.alarm.ui.editor.AlarmEditorScreen
 import com.loud.alarm.ui.home.HomeScreen
 import com.loud.alarm.ui.onboarding.OnboardingScreen
@@ -36,9 +38,13 @@ import com.loud.alarm.ui.settings.SettingsScreen
 import com.loud.alarm.ui.subscription.SubscriptionScreen
 import com.loud.alarm.ui.theme.LoudAlarmTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var analyticsLogger: AnalyticsLogger
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,7 +68,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize().systemBarsPadding(),
                         color = Color.Transparent
                     ) {
-                        AlarmNavigation()
+                        AlarmNavigation(analyticsLogger)
                     }
                 }
             }
@@ -71,10 +77,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AlarmNavigation() {
+fun AlarmNavigation(analyticsLogger: AnalyticsLogger) {
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val onboardingCompleted by onboardingViewModel.onboardingCompleted.collectAsState(initial = null)
     val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
 
     val bootstrapRoute = "bootstrap"
     val onboardingRoute = "onboarding"
@@ -88,6 +95,13 @@ fun AlarmNavigation() {
                 popUpTo(navController.graph.startDestinationId) { inclusive = true }
                 launchSingleTop = true
             }
+        }
+    }
+
+    LaunchedEffect(backStackEntry) {
+        val route = backStackEntry?.destination?.route?.substringBefore("?")
+        if (!route.isNullOrBlank() && route != bootstrapRoute) {
+            analyticsLogger.logScreen(route)
         }
     }
 

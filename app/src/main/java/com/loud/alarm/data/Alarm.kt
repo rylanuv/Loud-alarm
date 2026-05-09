@@ -14,6 +14,10 @@ enum class MathDifficulty {
     EASY, MEDIUM, HARD, EXTREME
 }
 
+enum class SquatDetectionMode {
+    MOTION, CAMERA
+}
+
 @Entity(tableName = "alarms")
 @TypeConverters(AlarmTypeConverters::class)
 data class Alarm(
@@ -34,12 +38,17 @@ data class Alarm(
     val stepCount: Int = 30,
     val shakeCount: Int = 30,
     val sinkImageUri: String? = null,       // Reference image URI for scan sink challenge
-    val scanObjectLabel: String = "",        // Selected object label for scan object challenge ("RANDOM" for random mode)
+    val scanObjectLabel: String = "RANDOM",        // Selected object label for scan object challenge ("RANDOM" for random mode)
     val scanObjectExcluded: Set<String> = emptySet(),  // Objects excluded from random selection
     val puzzleDifficulty: MathDifficulty = MathDifficulty.EASY,
     val squatCount: Int = 15,
+    val squatDetectionMode: SquatDetectionMode = SquatDetectionMode.CAMERA,
     val pushUpCount: Int = 15,
-    val reverseTypingCount: Int = 3
+    val pushUpDifficulty: MathDifficulty = MathDifficulty.HARD,
+    val reverseTypingCount: Int = 3,
+    val mathQuestionCount: Int = 1,
+    val memoryDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val memoryChallengeCount: Int = 3
 )
 
 class AlarmTypeConverters {
@@ -92,6 +101,21 @@ class AlarmTypeConverters {
             "HARD", "ADVANCED" -> MathDifficulty.HARD
             "EXTREME", "VERY_HARD", "INSANE" -> MathDifficulty.EXTREME
             else -> MathDifficulty.EASY
+        }
+    }
+
+    @TypeConverter
+    fun fromSquatDetectionMode(value: SquatDetectionMode): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toSquatDetectionMode(value: String?): SquatDetectionMode {
+        if (value.isNullOrBlank()) return SquatDetectionMode.CAMERA
+        return when (value.trim().uppercase(Locale.ROOT)) {
+            "CAMERA" -> SquatDetectionMode.CAMERA
+            "MOTION", "SENSOR", "ACCELEROMETER" -> SquatDetectionMode.MOTION
+            else -> SquatDetectionMode.CAMERA
         }
     }
 

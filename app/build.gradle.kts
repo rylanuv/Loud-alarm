@@ -6,6 +6,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.loud.alarm"
     compileSdk = 35
@@ -14,8 +18,8 @@ android {
         applicationId = "com.loud.alarm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.0"
+        versionCode = 11
+        versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -98,11 +102,14 @@ dependencies {
     // ML Kit Barcode Scanning (thin/Play Services variant — model downloaded on-device, not bundled)
     implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
 
-    // ML Kit Image Labeling (thin/Play Services variant — saves ~30-35 MB vs bundled)
-    implementation("com.google.android.gms:play-services-mlkit-image-labeling:16.0.8")
+    // ML Kit Image Labeling (bundled variant — richer label vocabulary for reliable object recognition)
+    implementation("com.google.mlkit:image-labeling:17.0.9")
 
     // ML Kit Object Detection (used by Scan Object challenge for localizing specific objects)
     implementation("com.google.mlkit:object-detection:17.0.2")
+
+    // ML Kit Pose Detection (bundled model for push-up shoulder tracking)
+    implementation("com.google.mlkit:pose-detection:18.0.0-beta5")
 
     // Accompanist (Permissions)
     implementation("com.google.accompanist:accompanist-permissions:0.37.3")
@@ -113,6 +120,9 @@ dependencies {
     // Google Play In-App Review
     implementation("com.google.android.play:review-ktx:2.0.2")
 
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    implementation("com.google.firebase:firebase-analytics")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

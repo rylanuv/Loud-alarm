@@ -133,6 +133,7 @@ class AlarmActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onDismissActivity = {
                                 alarmFlowCompleted = true
+                                viewModel.logAlarmDismissed(alarmState!!)
                                 lifecycleScope.launch {
                                     settingsRepository.incrementAlarmDismissCount()
                                 }
@@ -479,6 +480,7 @@ fun ActiveAlarmScreen(
                             Log.d("ActiveAlarmScreen", "Rendering MathChallengeScreen")
                             MathChallengeScreen(
                                 difficulty = alarm.mathDifficulty,
+                                questionCount = alarm.mathQuestionCount,
                                 onSuccess = {
                                     Log.d("ActiveAlarmScreen", "Math challenge SOLVED!")
                                     mathSolved = true
@@ -530,6 +532,8 @@ fun ActiveAlarmScreen(
                         }
                         ChallengeType.MEMORY -> {
                             com.loud.alarm.ui.challenge.MemoryChallengeScreen(
+                                difficulty = alarm.memoryDifficulty,
+                                challengeCount = alarm.memoryChallengeCount,
                                 onSuccess = { memorySolved = true }
                             )
                         }
@@ -638,6 +642,7 @@ fun ActiveAlarmScreen(
                         ChallengeType.SQUAT -> {
                             SquatChallengeScreen(
                                 targetSquats = alarm.squatCount,
+                                detectionMode = alarm.squatDetectionMode,
                                 onSuccess = { squatSolved = true }
                             )
                         }

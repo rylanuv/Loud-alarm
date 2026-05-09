@@ -44,7 +44,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,9 +66,13 @@ import com.loud.alarm.R
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlarmReliabilityScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
+    val skeletonOverlayEnabled by viewModel.skeletonOverlayEnabled.collectAsState()
+    var huaweiTapCount by remember { mutableIntStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
@@ -140,7 +150,25 @@ fun AlarmReliabilityScreen(
                     onActionClick = { context.openNotificationSettings() }
                 )
 
-                BrandGrid()
+                BrandGrid(
+                    onBrandTap = { brand ->
+                        if (brand == "Huawei") {
+                            huaweiTapCount++
+                            if (huaweiTapCount >= 5 && !isDevModeEnabled) {
+                                viewModel.setDevModeEnabled(true)
+                            }
+                        } else {
+                            huaweiTapCount = 0
+                        }
+                    }
+                )
+
+                if (isDevModeEnabled) {
+                    DebugToolsSection(
+                        skeletonOverlayEnabled = skeletonOverlayEnabled,
+                        onSkeletonOverlayToggle = { viewModel.setSkeletonOverlayEnabled(it) }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -275,7 +303,9 @@ private fun StepActionButton(
 }
 
 @Composable
-private fun BrandGrid() {
+private fun BrandGrid(
+    onBrandTap: (String) -> Unit = {}
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = "Where users usually find these settings",
@@ -293,7 +323,99 @@ private fun BrandGrid() {
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             brands.forEach { (brand, hint, icon) ->
-                BrandRow(brand = brand, hint = hint, icon = icon)
+                BrandRow(
+                    brand = brand, 
+                    hint = hint, 
+                    icon = icon,
+                    onClick = { onBrandTap(brand) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DebugToolsSection(
+    skeletonOverlayEnabled: Boolean,
+    onSkeletonOverlayToggle: (Boolean) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Debugging tools",
+            style = MaterialTheme.typography.titleSmall,
+            color = Color(0xFFF1C46C),
+            fontWeight = FontWeight.Bold
+        )
+
+        GlassCard(contentPadding = PaddingValues(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Skeleton Overlay",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Show pose landmarks during challenges.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+
+                androidx.compose.material3.Switch(
+                    checked = skeletonOverlayEnabled,
+                    onCheckedChange = onSkeletonOverlayToggle,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFFF1C46C),
+                        checkedTrackColor = Color(0xFFF1C46C).copy(alpha = 0.5f)
+                    )
+                )
+            }
+        }
+
+        GlassCard(contentPadding = PaddingValues(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Vibration Test",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Verify the vibration hardware is working.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+
+                val context = LocalContext.current
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            vibrator.vibrate(android.os.VibrationEffect.createOneShot(500, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            vibrator.vibrate(500)
+                        }
+                    }
+                ) {
+                    Text(
+                        text = "TEST",
+                        color = Color(0xFFF1C46C),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
@@ -303,10 +425,13 @@ private fun BrandGrid() {
 private fun BrandRow(
     brand: String,
     hint: String,
-    icon: ImageVector
+    icon: ImageVector,
+    onClick: () -> Unit = {}
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
