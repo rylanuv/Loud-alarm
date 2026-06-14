@@ -18,10 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,8 +55,7 @@ import java.util.concurrent.Executors
 @Composable
 fun QrCodeChallengeScreen(
     targetBarcodeValue: String?,
-    onSuccess: () -> Unit,
-    onFallbackToMath: (() -> Unit)? = null
+    onSuccess: () -> Unit
 ) {
     var scannedValue by remember { mutableStateOf<String?>(null) }
     
@@ -115,24 +111,6 @@ fun QrCodeChallengeScreen(
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Bold
                     )
-                }
-
-                // Fallback to math option
-                if (onFallbackToMath != null) {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    TextButton(
-                        onClick = onFallbackToMath,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text(
-                            text = "Can't find your QR code? Solve Math instead",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
                 }
             }
         }

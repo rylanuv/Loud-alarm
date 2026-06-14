@@ -35,6 +35,7 @@ class SettingsRepository @Inject constructor(
         val VIBRATION_PATTERN = stringPreferencesKey("vibration_pattern")
         val ALARM_DISMISS_COUNT = intPreferencesKey("alarm_dismiss_count")
         val REVIEW_SHOWN = booleanPreferencesKey("review_shown")
+        val NEXT_REVIEW_DISMISS_MILESTONE = intPreferencesKey("next_review_dismiss_milestone")
         val IS_DEV_MODE_ENABLED = booleanPreferencesKey("is_dev_mode_enabled")
         val SKELETON_OVERLAY_ENABLED = booleanPreferencesKey("skeleton_overlay_enabled")
     }
@@ -183,6 +184,11 @@ class SettingsRepository @Inject constructor(
             preferences[PreferencesKeys.REVIEW_SHOWN] ?: false
         }
 
+    val nextReviewDismissMilestone: Flow<Int> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.NEXT_REVIEW_DISMISS_MILESTONE] ?: 0
+        }
+
     suspend fun incrementAlarmDismissCount() {
         context.dataStore.edit { preferences: MutablePreferences ->
             val current = preferences[PreferencesKeys.ALARM_DISMISS_COUNT] ?: 0
@@ -190,9 +196,9 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    suspend fun setReviewShown(shown: Boolean) {
+    suspend fun setNextReviewDismissMilestone(milestone: Int) {
         context.dataStore.edit { preferences: MutablePreferences ->
-            preferences[PreferencesKeys.REVIEW_SHOWN] = shown
+            preferences[PreferencesKeys.NEXT_REVIEW_DISMISS_MILESTONE] = milestone
         }
     }
 }

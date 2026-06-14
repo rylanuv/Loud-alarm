@@ -7,7 +7,7 @@ import androidx.room.TypeConverters
 import java.util.Locale
 
 enum class ChallengeType {
-    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT, SQUAT, PUSH_UP, REVERSE_TYPING, AUDIO_MEMORY
+    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, TAP_CHALLENGE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT, SQUAT, PUSH_UP, REVERSE_TYPING, AUDIO_MEMORY, CHARGER
 }
 
 enum class MathDifficulty {
@@ -37,6 +37,7 @@ data class Alarm(
     val rewriteText: String = "",
     val stepCount: Int = 30,
     val shakeCount: Int = 30,
+    val tapCount: Int = 30,
     val sinkImageUri: String? = null,       // Reference image URI for scan sink challenge
     val scanObjectLabel: String = "RANDOM",        // Selected object label for scan object challenge ("RANDOM" for random mode)
     val scanObjectExcluded: Set<String> = emptySet(),  // Objects excluded from random selection
@@ -48,7 +49,11 @@ data class Alarm(
     val reverseTypingCount: Int = 3,
     val mathQuestionCount: Int = 1,
     val memoryDifficulty: MathDifficulty = MathDifficulty.EASY,
-    val memoryChallengeCount: Int = 3
+    val memoryChallengeCount: Int = 3,
+    val spellBeeDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val spellBeeCount: Int = 3,
+    val audioMemoryDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val audioMemoryChallengeCount: Int = 3
 )
 
 class AlarmTypeConverters {

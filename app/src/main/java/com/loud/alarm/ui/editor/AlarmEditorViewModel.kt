@@ -72,6 +72,7 @@ class AlarmEditorViewModel @Inject constructor(
                     rewriteText = alarm.rewriteText,
                     stepCount = alarm.stepCount,
                     shakeCount = alarm.shakeCount,
+                    tapCount = alarm.tapCount,
                     squatCount = alarm.squatCount,
                     squatDetectionMode = alarm.squatDetectionMode,
                     pushUpCount = alarm.pushUpCount,
@@ -82,6 +83,10 @@ class AlarmEditorViewModel @Inject constructor(
                     scanObjectExcluded = alarm.scanObjectExcluded,
                     memoryDifficulty = alarm.memoryDifficulty,
                     memoryChallengeCount = alarm.memoryChallengeCount,
+                    spellBeeDifficulty = alarm.spellBeeDifficulty,
+                    spellBeeCount = alarm.spellBeeCount,
+                    audioMemoryDifficulty = alarm.audioMemoryDifficulty,
+                    audioMemoryChallengeCount = alarm.audioMemoryChallengeCount,
                     timePickerVersion = _uiState.value.timePickerVersion + 1
                 )
             }
@@ -178,6 +183,10 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(shakeCount = count)
     }
 
+    fun updateTapCount(count: Int) {
+        _uiState.value = _uiState.value.copy(tapCount = count)
+    }
+
     fun updateSquatCount(count: Int) {
         _uiState.value = _uiState.value.copy(squatCount = count)
     }
@@ -204,6 +213,22 @@ class AlarmEditorViewModel @Inject constructor(
 
     fun updateMemoryChallengeCount(count: Int) {
         _uiState.value = _uiState.value.copy(memoryChallengeCount = count)
+    }
+
+    fun updateSpellBeeDifficulty(difficulty: MathDifficulty) {
+        _uiState.value = _uiState.value.copy(spellBeeDifficulty = difficulty)
+    }
+
+    fun updateSpellBeeCount(count: Int) {
+        _uiState.value = _uiState.value.copy(spellBeeCount = count)
+    }
+
+    fun updateAudioMemoryDifficulty(difficulty: MathDifficulty) {
+        _uiState.value = _uiState.value.copy(audioMemoryDifficulty = difficulty)
+    }
+
+    fun updateAudioMemoryChallengeCount(count: Int) {
+        _uiState.value = _uiState.value.copy(audioMemoryChallengeCount = count)
     }
 
     fun updateSinkImageUri(uri: String?) {
@@ -241,6 +266,7 @@ class AlarmEditorViewModel @Inject constructor(
                 rewriteText = state.rewriteText,
                 stepCount = state.stepCount,
                 shakeCount = state.shakeCount,
+                tapCount = state.tapCount,
                 squatCount = state.squatCount,
                 squatDetectionMode = state.squatDetectionMode,
                 pushUpCount = state.pushUpCount,
@@ -251,6 +277,10 @@ class AlarmEditorViewModel @Inject constructor(
                 scanObjectExcluded = state.scanObjectExcluded,
                 memoryDifficulty = state.memoryDifficulty,
                 memoryChallengeCount = state.memoryChallengeCount,
+                spellBeeDifficulty = state.spellBeeDifficulty,
+                spellBeeCount = state.spellBeeCount,
+                audioMemoryDifficulty = state.audioMemoryDifficulty,
+                audioMemoryChallengeCount = state.audioMemoryChallengeCount,
                 enabled = true
             )
 
@@ -264,6 +294,7 @@ class AlarmEditorViewModel @Inject constructor(
             analyticsLogger.logAlarmSaved(
                 isNewAlarm = isNewAlarm,
                 challengeCount = state.challengeTypes.count { it != ChallengeType.NONE },
+                challengeTypes = state.challengeTypes.joinToString(",") { it.name },
                 isRepeating = state.daysOfWeek.isNotEmpty(),
                 wakeUpCheckMinutes = state.wakeUpCheckMinutes
             )
@@ -287,6 +318,7 @@ data class AlarmUiState(
     val rewriteText: String = "",
     val stepCount: Int = 30,
     val shakeCount: Int = 30,
+    val tapCount: Int = 30,
     val squatCount: Int = 15,
     val squatDetectionMode: SquatDetectionMode = SquatDetectionMode.CAMERA,
     val pushUpCount: Int = 15,
@@ -298,5 +330,9 @@ data class AlarmUiState(
     val puzzleDifficulty: MathDifficulty = MathDifficulty.EASY,
     val memoryDifficulty: MathDifficulty = MathDifficulty.EASY,
     val memoryChallengeCount: Int = 3,
+    val spellBeeDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val spellBeeCount: Int = 3,
+    val audioMemoryDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val audioMemoryChallengeCount: Int = 3,
     val timePickerVersion: Int = 0
 )

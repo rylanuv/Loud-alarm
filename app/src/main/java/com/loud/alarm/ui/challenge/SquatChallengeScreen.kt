@@ -55,6 +55,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -94,26 +96,44 @@ private const val MIN_TRAVEL_PX = 34f
 private const val HIP_TRAVEL_RATIO = 0.13f
 private const val RISE_RETURN_RATIO = 0.50f
 private const val RISE_FROM_BOTTOM_RATIO = 0.65f
-private const val BENT_KNEE_ANGLE_DEGREES = 145f
+private const val BENT_KNEE_ANGLE_DEGREES = 100f
 private const val STRAIGHT_KNEE_ANGLE_DEGREES = 155f
+private const val CALIBRATION_STANDING_KNEE_ANGLE = 160f
+private const val CALIBRATION_FRAMES_REQUIRED = 5
+
+// Front-view detection: use vertical compression instead of knee angle
+private const val FRONT_VIEW_HIP_SPREAD_RATIO = 1.4f // hips wider than deep → front view
+private const val FRONT_SQUAT_COMPRESSION_RATIO = 0.72f // hip-ankle shrinks to ≤72% of standing
+private const val FRONT_STANDING_COMPRESSION_RATIO = 0.90f // must return to ≥90% of standing height
 
 private const val MOTION_GRAVITY_ALPHA = 0.8f
-private const val MOTION_ACCEL_SMOOTHING = 0.4f
-private const val MOTION_VELOCITY_DECAY = 0.98f
-private const val MOTION_ACCEL_DOWN_ENTER = -0.6f
-private const val MOTION_ACCEL_UP_ENTER = 0.6f
-private const val MOTION_MIN_DOWN_DISPLACEMENT = 0.03f
+private const val MOTION_ACCEL_SMOOTHING = 0.25f
+private const val MOTION_VELOCITY_DECAY = 0.95f
+private const val MOTION_ACCEL_DOWN_ENTER = -0.5f
+private const val MOTION_ACCEL_UP_ENTER = 0.5f
+private const val MOTION_MIN_DOWN_DISPLACEMENT = 0.02f
+private const val MOTION_MIN_UP_DISPLACEMENT = 0.015f
 private const val MOTION_MIN_DOWN_DURATION_MS = 250L
 private const val MOTION_MIN_UP_DURATION_MS = 200L
 private const val MOTION_MAX_DOWN_DURATION_MS = 5_000L
 private const val MOTION_MAX_UP_DURATION_MS = 4_000L
 private const val MOTION_MIN_SQUAT_INTERVAL_MS = 600L
-private const val MOTION_WARMUP_MS = 600L
+private const val MOTION_WARMUP_MS = 400L
+private const val MOTION_GRIP_EDGE_ZONE_RATIO = 0.30f
+private const val MOTION_SUSTAINED_SAMPLES_REQUIRED = 1
 
 private enum class MotionSquatPhase {
     IDLE,
     GOING_DOWN,
     GOING_UP
+}
+
+private data class MotionGripState(
+    val leftThumbDown: Boolean = false,
+    val rightThumbDown: Boolean = false
+) {
+    val isReady: Boolean
+        get() = leftThumbDown && rightThumbDown
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -205,7 +225,7 @@ fun SquatChallengeScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Prop your phone so the camera can see your hips, knees, and feet.",
+                        text = "Prop your phone in front of you or to the side so the camera can see your full body.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.White.copy(alpha = 0.86f),
                         textAlign = TextAlign.Center
@@ -325,6 +345,9 @@ private fun MotionSquatChallengeContent(
 ) {
     val context = LocalContext.current
     val currentOnSquatDetected by rememberUpdatedState(onSquatDetected)
+    var gripState by remember { mutableStateOf(MotionGripState()) }
+    val gripReady = gripState.isReady
+    val currentGripReady by rememberUpdatedState(gripReady)
     var sensorAvailable by remember { mutableStateOf(true) }
 
     DisposableEffect(Unit) {
@@ -335,11 +358,24 @@ private fun MotionSquatChallengeContent(
         var smoothedAccel = 0f
         var verticalVelocity = 0f
         var phaseDisplacement = 0f
+        var downPhaseDisplacement = 0f
+        var sustainedCount = 0
         var phase = MotionSquatPhase.IDLE
         var phaseStartMs = 0L
         var lastSquatMs = 0L
         var startMs = 0L
         var prevTimestampNs = 0L
+        var wasGripReady = false
+
+        fun resetMotionTracking(resetSmoothedAccel: Boolean = false) {
+            if (resetSmoothedAccel) smoothedAccel = 0f
+            verticalVelocity = 0f
+            phaseDisplacement = 0f
+            downPhaseDisplacement = 0f
+            sustainedCount = 0
+            phase = MotionSquatPhase.IDLE
+            phaseStartMs = 0L
+        }
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
@@ -347,6 +383,27 @@ private fun MotionSquatChallengeContent(
 
                 val nowNs = event.timestamp
                 val nowMs = nowNs / 1_000_000L
+
+                if (!currentGripReady) {
+                    if (wasGripReady) {
+                        Log.d(TAG, "Motion squat paused, two-thumb grip lost")
+                    }
+                    wasGripReady = false
+                    startMs = 0L
+                    prevTimestampNs = 0L
+                    resetMotionTracking(resetSmoothedAccel = true)
+                    return
+                }
+
+                if (!wasGripReady) {
+                    wasGripReady = true
+                    startMs = nowMs
+                    prevTimestampNs = nowNs
+                    resetMotionTracking(resetSmoothedAccel = true)
+                    Log.d(TAG, "Motion squat grip ready")
+                    return
+                }
+
                 if (startMs == 0L) startMs = nowMs
 
                 for (i in 0..2) {
@@ -388,30 +445,40 @@ private fun MotionSquatChallengeContent(
                 when (phase) {
                     MotionSquatPhase.IDLE -> {
                         if (smoothedAccel < MOTION_ACCEL_DOWN_ENTER) {
-                            phase = MotionSquatPhase.GOING_DOWN
-                            phaseStartMs = nowMs
-                            phaseDisplacement = 0f
-                            verticalVelocity = 0f
-                            Log.d(TAG, "Motion squat -> GOING_DOWN accel=$smoothedAccel")
+                            sustainedCount++
+                            if (sustainedCount >= MOTION_SUSTAINED_SAMPLES_REQUIRED) {
+                                phase = MotionSquatPhase.GOING_DOWN
+                                phaseStartMs = nowMs
+                                phaseDisplacement = 0f
+                                downPhaseDisplacement = 0f
+                                verticalVelocity = 0f
+                                sustainedCount = 0
+                                Log.d(TAG, "Motion squat -> GOING_DOWN accel=$smoothedAccel (sustained)")
+                            }
+                        } else {
+                            sustainedCount = 0
                         }
                     }
 
                     MotionSquatPhase.GOING_DOWN -> {
                         if (timeInPhaseMs > MOTION_MAX_DOWN_DURATION_MS) {
                             phase = MotionSquatPhase.IDLE
+                            sustainedCount = 0
                             Log.d(TAG, "Motion squat -> IDLE down timeout=${timeInPhaseMs}ms")
                         } else if (smoothedAccel > MOTION_ACCEL_UP_ENTER) {
                             if (
                                 timeInPhaseMs >= MOTION_MIN_DOWN_DURATION_MS &&
                                 phaseDisplacement >= MOTION_MIN_DOWN_DISPLACEMENT
                             ) {
+                                downPhaseDisplacement = phaseDisplacement
                                 phase = MotionSquatPhase.GOING_UP
                                 phaseStartMs = nowMs
                                 phaseDisplacement = 0f
                                 verticalVelocity = 0f
-                                Log.d(TAG, "Motion squat -> GOING_UP downDuration=${timeInPhaseMs}ms")
+                                Log.d(TAG, "Motion squat -> GOING_UP downDuration=${timeInPhaseMs}ms downDisp=$downPhaseDisplacement")
                             } else if (timeInPhaseMs < MOTION_MIN_DOWN_DURATION_MS) {
                                 phase = MotionSquatPhase.IDLE
+                                sustainedCount = 0
                                 Log.d(TAG, "Motion squat rejected, down too short=${timeInPhaseMs}ms")
                             }
                         }
@@ -421,28 +488,37 @@ private fun MotionSquatChallengeContent(
                         if (timeInPhaseMs > MOTION_MAX_UP_DURATION_MS) {
                             if (
                                 timeInPhaseMs >= MOTION_MIN_UP_DURATION_MS &&
+                                phaseDisplacement >= MOTION_MIN_UP_DISPLACEMENT &&
                                 nowMs - lastSquatMs >= MOTION_MIN_SQUAT_INTERVAL_MS
                             ) {
                                 currentOnSquatDetected()
                                 lastSquatMs = nowMs
-                                Log.d(TAG, "Motion squat counted on timeout")
+                                Log.d(TAG, "Motion squat counted on timeout upDisp=$phaseDisplacement")
                             }
                             phase = MotionSquatPhase.IDLE
+                            sustainedCount = 0
                         } else if (
                             timeInPhaseMs >= MOTION_MIN_UP_DURATION_MS &&
                             smoothedAccel < MOTION_ACCEL_UP_ENTER
                         ) {
-                            if (nowMs - lastSquatMs >= MOTION_MIN_SQUAT_INTERVAL_MS) {
+                            if (
+                                phaseDisplacement >= MOTION_MIN_UP_DISPLACEMENT &&
+                                nowMs - lastSquatMs >= MOTION_MIN_SQUAT_INTERVAL_MS
+                            ) {
                                 currentOnSquatDetected()
                                 lastSquatMs = nowMs
-                                Log.d(TAG, "Motion squat counted")
+                                Log.d(TAG, "Motion squat counted upDisp=$phaseDisplacement")
+                            } else {
+                                Log.d(TAG, "Motion squat rejected, up displacement too small=$phaseDisplacement")
                             }
                             phase = MotionSquatPhase.IDLE
+                            sustainedCount = 0
                         } else if (
                             smoothedAccel < MOTION_ACCEL_DOWN_ENTER &&
                             timeInPhaseMs < MOTION_MIN_UP_DURATION_MS
                         ) {
                             phase = MotionSquatPhase.IDLE
+                            sustainedCount = 0
                             Log.d(TAG, "Motion squat rejected, up too short=${timeInPhaseMs}ms")
                         }
                     }
@@ -467,6 +543,35 @@ private fun MotionSquatChallengeContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .pointerInput(Unit) {
+                val activeTouches = mutableMapOf<PointerId, Offset>()
+                try {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { change ->
+                                if (change.pressed) {
+                                    activeTouches[change.id] = change.position
+                                } else {
+                                    activeTouches.remove(change.id)
+                                }
+                            }
+
+                            val leftEdgeLimit = size.width * MOTION_GRIP_EDGE_ZONE_RATIO
+                            val rightEdgeLimit = size.width * (1f - MOTION_GRIP_EDGE_ZONE_RATIO)
+                            val nextGripState = MotionGripState(
+                                leftThumbDown = activeTouches.values.any { it.x <= leftEdgeLimit },
+                                rightThumbDown = activeTouches.values.any { it.x >= rightEdgeLimit }
+                            )
+                            if (gripState != nextGripState) {
+                                gripState = nextGripState
+                            }
+                        }
+                    }
+                } finally {
+                    gripState = MotionGripState()
+                }
+            }
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -480,37 +585,135 @@ private fun MotionSquatChallengeContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = if (sensorAvailable) "Hold your phone and do squats" else "Motion sensor unavailable",
+            text = when {
+                !sensorAvailable -> "Motion sensor unavailable"
+                gripReady -> "Both thumbs detected. Keep holding and squat now."
+                else -> "Place one thumb on each side grip to unlock squats."
+            },
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (gripReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        MotionThumbGripIndicator(
+            gripState = gripState,
+            enabled = sensorAvailable
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
 
         Box(
             modifier = Modifier
                 .size(200.dp)
                 .scale(pulseScale)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .background(
+                    if (gripReady) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.74f)
+                    }
+                ),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "$currentSquats",
                     style = MaterialTheme.typography.displayLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = if (gripReady) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "/ $targetSquats squats",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                    color = if (gripReady) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    },
                     textAlign = TextAlign.Center
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun MotionThumbGripIndicator(
+    gripState: MotionGripState,
+    enabled: Boolean
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(130.dp)
+    ) {
+        MotionThumbPad(
+            label = "LEFT\nTHUMB",
+            isPressed = enabled && gripState.leftThumbDown,
+            modifier = Modifier.align(Alignment.CenterStart)
+        )
+        Text(
+            text = if (enabled && gripState.isReady) {
+                "Grip locked"
+            } else {
+                "Hold both side pads"
+            },
+            style = MaterialTheme.typography.titleMedium,
+            color = if (enabled && gripState.isReady) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.align(Alignment.Center)
+        )
+        MotionThumbPad(
+            label = "RIGHT\nTHUMB",
+            isPressed = enabled && gripState.rightThumbDown,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
+    }
+}
+
+@Composable
+private fun MotionThumbPad(
+    label: String,
+    isPressed: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (isPressed) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f)
+    }
+    val textColor = if (isPressed) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Box(
+        modifier = modifier
+            .size(width = 74.dp, height = 124.dp)
+            .clip(CircleShape)
+            .background(backgroundColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (isPressed) "HOLDING" else label,
+            style = MaterialTheme.typography.labelMedium,
+            color = textColor,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -609,6 +812,7 @@ private data class SquatTrackingFeedback(
 )
 
 private enum class SquatPosePhase {
+    CALIBRATING,
     STANDING,
     LOWERING
 }
@@ -617,7 +821,9 @@ private data class SquatMotionSample(
     val hipY: Float,
     val bodyScale: Float,
     val kneeAngle: Float?,
-    val confidence: Float
+    val confidence: Float,
+    val isFrontView: Boolean = false,
+    val hipAnkleHeight: Float = Float.NaN // raw hip-to-ankle vertical distance in pixels
 )
 
 private class SquatPoseAnalyzer(
@@ -639,12 +845,14 @@ private class SquatPoseAnalyzer(
     @Volatile
     private var isClosed = false
 
-    private var phase = SquatPosePhase.STANDING
+    private var phase = SquatPosePhase.CALIBRATING
     private var smoothedHipY = Float.NaN
     private var standingHipY = Float.NaN
     private var bottomHipY = Float.NaN
     private var phaseStartedMs = 0L
     private var lastSquatMs = 0L
+    private var calibrationFrames = 0
+    private var standingCompressionHeight = Float.NaN // hip-ankle vertical distance when standing (front-view)
 
     @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
@@ -706,12 +914,60 @@ private class SquatPoseAnalyzer(
 
         val travelThreshold = max(MIN_TRAVEL_PX, sample.bodyScale * HIP_TRAVEL_RATIO)
         val kneeAngle = sample.kneeAngle
-        val kneeIsBentEnough = kneeAngle == null || kneeAngle <= BENT_KNEE_ANGLE_DEGREES
-        val kneeLooksStanding = kneeAngle == null || kneeAngle >= STRAIGHT_KNEE_ANGLE_DEGREES
+        val isFront = sample.isFrontView
+        val currentHeight = sample.hipAnkleHeight
+
+        // Compute compression ratio: current hip-ankle distance / standing hip-ankle distance
+        val compression = if (!currentHeight.isNaN() && !standingCompressionHeight.isNaN() && standingCompressionHeight > 0f) {
+            currentHeight / standingCompressionHeight
+        } else {
+            1f // assume standing if no baseline yet
+        }
+
+        // Side view: use knee angle thresholds
+        // Front view: use vertical compression ratio (hip-ankle distance shrinks when squatting)
+        val kneeIsBentEnough = if (isFront) {
+            compression <= FRONT_SQUAT_COMPRESSION_RATIO
+        } else {
+            kneeAngle != null && kneeAngle <= BENT_KNEE_ANGLE_DEGREES
+        }
+        val kneeLooksStanding = if (isFront) {
+            compression >= FRONT_STANDING_COMPRESSION_RATIO
+        } else {
+            kneeAngle != null && kneeAngle >= STRAIGHT_KNEE_ANGLE_DEGREES
+        }
+        val kneeStraightForRise = kneeLooksStanding
+
         val nowMs = SystemClock.elapsedRealtime()
         if (phaseStartedMs == 0L) phaseStartedMs = nowMs
 
         when (phase) {
+            SquatPosePhase.CALIBRATING -> {
+                val kneeStraightForCalibration = if (isFront) {
+                    // In front view, just accept as standing if ankles are visible and height is reasonable
+                    !currentHeight.isNaN() && currentHeight > 50f
+                } else {
+                    kneeAngle != null && kneeAngle >= CALIBRATION_STANDING_KNEE_ANGLE
+                }
+                if (kneeStraightForCalibration) {
+                    calibrationFrames++
+                    if (calibrationFrames >= CALIBRATION_FRAMES_REQUIRED) {
+                        phase = SquatPosePhase.STANDING
+                        standingHipY = smoothedHipY
+                        bottomHipY = smoothedHipY
+                        standingCompressionHeight = if (!currentHeight.isNaN()) currentHeight else Float.NaN // store raw baseline for front-view
+                        phaseStartedMs = nowMs
+                        Log.d(TAG, "Calibration complete, standingHipY=$standingHipY, kneeAngle=$kneeAngle, frontView=$isFront, compression=$compression")
+                        postFeedback(SquatTrackingFeedback("Tracking your squat. Bend your knees and lower your hips.", true))
+                    } else {
+                        postFeedback(SquatTrackingFeedback("Stand up straight to begin. Keep your legs straight.", true))
+                    }
+                } else {
+                    calibrationFrames = 0
+                    postFeedback(SquatTrackingFeedback("Stand up straight to begin. Keep your legs straight.", true))
+                }
+            }
+
             SquatPosePhase.STANDING -> {
                 standingHipY = if (standingHipY.isNaN()) {
                     smoothedHipY
@@ -727,7 +983,7 @@ private class SquatPoseAnalyzer(
                     phase = SquatPosePhase.LOWERING
                     phaseStartedMs = nowMs
                     bottomHipY = smoothedHipY
-                    Log.d(TAG, "Phase -> LOWERING (drop=$drop, threshold=$travelThreshold, kneeAngle=$kneeAngle)")
+                    Log.d(TAG, "Phase -> LOWERING (drop=$drop, threshold=$travelThreshold, kneeAngle=$kneeAngle, frontView=$isFront, compression=$compression)")
                     postFeedback(SquatTrackingFeedback("Good - stand back up!", true))
                 } else {
                     postFeedback(SquatTrackingFeedback("Tracking your squat. Bend your knees and lower your hips.", true))
@@ -752,11 +1008,12 @@ private class SquatPoseAnalyzer(
                     totalDrop >= travelThreshold &&
                     roseEnough &&
                     returnedNearTop &&
+                    kneeStraightForRise &&
                     repDurationMs >= MIN_REP_DURATION_MS &&
                     countableInterval
                 ) {
                     lastSquatMs = nowMs
-                    Log.d(TAG, "Squat counted! (totalDrop=$totalDrop, rise=$riseFromBottom, duration=${repDurationMs}ms)")
+                    Log.d(TAG, "Squat counted! (totalDrop=$totalDrop, rise=$riseFromBottom, duration=${repDurationMs}ms, kneeAngle=$kneeAngle, frontView=$isFront, compression=$compression)")
                     postSquatDetected()
                     resetTracking(smoothedHipY)
                     postFeedback(SquatTrackingFeedback("Squat counted! Keep going.", true))
@@ -804,20 +1061,94 @@ private class SquatPoseAnalyzer(
         val confidence = visibleHips.sumOf { it.inFrameLikelihood.toDouble() }.toFloat() +
             visibleKnees.sumOf { it.inFrameLikelihood.toDouble() }.toFloat()
 
+        // Detect front view: when facing the camera, both hips are visible with significant
+        // horizontal spread. In side view, the hips overlap horizontally.
+        val isFrontView = detectFrontView(leftHip, rightHip, leftShoulder, rightShoulder)
+
+        // Compute raw hip-to-ankle vertical distance for front-view detection.
+        // When squatting, the hip drops toward the ankle, shrinking this vertical distance.
+        val hipAnkleHeight = computeHipAnkleHeight(visibleHips, leftAnkle, rightAnkle)
+
         return SquatMotionSample(
             hipY = hipY,
             bodyScale = bodyScale,
             kneeAngle = kneeAngle,
-            confidence = confidence
+            confidence = confidence,
+            isFrontView = isFrontView,
+            hipAnkleHeight = hipAnkleHeight
         )
     }
 
+    /**
+     * Detect if camera is in front-view by checking the horizontal spread of both hips.
+     * In front view, both hips are visible and spread apart horizontally.
+     * In side view, hips are stacked (one behind the other) with minimal horizontal gap.
+     */
+    private fun detectFrontView(
+        leftHip: PoseLandmark?,
+        rightHip: PoseLandmark?,
+        leftShoulder: PoseLandmark?,
+        rightShoulder: PoseLandmark?
+    ): Boolean {
+        // Need both hips visible to determine view angle
+        if (!isVisible(leftHip, MIN_SUPPORT_LANDMARK_CONFIDENCE) ||
+            !isVisible(rightHip, MIN_SUPPORT_LANDMARK_CONFIDENCE)
+        ) {
+            return false
+        }
+
+        val hipSpreadX = abs(leftHip!!.position.x - rightHip!!.position.x)
+        val hipSpreadY = abs(leftHip.position.y - rightHip.position.y)
+
+        // In front view, hips are spread horizontally. In side view, they're stacked vertically
+        // or very close together horizontally.
+        if (hipSpreadX < 10f) return false // too close, likely side view
+
+        // Also check shoulders if available for better accuracy
+        if (isVisible(leftShoulder, MIN_SUPPORT_LANDMARK_CONFIDENCE) &&
+            isVisible(rightShoulder, MIN_SUPPORT_LANDMARK_CONFIDENCE)
+        ) {
+            val shoulderSpreadX = abs(leftShoulder!!.position.x - rightShoulder!!.position.x)
+            // In front view, both shoulders AND hips have significant horizontal spread
+            return shoulderSpreadX > 20f && hipSpreadX > 20f &&
+                hipSpreadX > hipSpreadY * FRONT_VIEW_HIP_SPREAD_RATIO
+        }
+
+        // Fallback: just use hip spread ratio
+        return hipSpreadX > hipSpreadY * FRONT_VIEW_HIP_SPREAD_RATIO && hipSpreadX > 20f
+    }
+
+    /**
+     * Compute the raw vertical distance from hip to ankle in pixels.
+     * Returns Float.NaN if ankles are not visible.
+     */
+    private fun computeHipAnkleHeight(
+        visibleHips: List<PoseLandmark>,
+        leftAnkle: PoseLandmark?,
+        rightAnkle: PoseLandmark?
+    ): Float {
+        val visibleAnkles = listOfNotNull(leftAnkle, rightAnkle)
+            .filter { it.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE }
+        if (visibleAnkles.isEmpty()) return Float.NaN
+
+        val avgHipY = visibleHips.map { it.position.y }.average().toFloat()
+        val avgAnkleY = visibleAnkles.map { it.position.y }.average().toFloat()
+
+        // Ankle should be below hip (larger Y value in image coordinates)
+        val verticalDistance = avgAnkleY - avgHipY
+        if (verticalDistance <= 0f) return Float.NaN
+
+        return verticalDistance
+    }
+
     private fun resetTracking(startSignal: Float = Float.NaN) {
-        phase = SquatPosePhase.STANDING
+        phase = SquatPosePhase.CALIBRATING
         phaseStartedMs = 0L
         smoothedHipY = startSignal
         standingHipY = startSignal
         bottomHipY = startSignal
+        calibrationFrames = 0
+        standingCompressionHeight = Float.NaN
     }
 
     private fun postFeedback(feedback: SquatTrackingFeedback) {

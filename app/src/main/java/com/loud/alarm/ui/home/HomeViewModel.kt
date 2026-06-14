@@ -66,6 +66,7 @@ class HomeViewModel @Inject constructor(
             analyticsLogger.logAlarmToggled(
                 enabled = newAlarm.enabled,
                 challengeCount = alarm.analyticsChallengeCount(),
+                challengeTypes = alarm.analyticsChallengeTypes(),
                 isRepeating = alarm.daysOfWeek.isNotEmpty()
             )
         }
@@ -77,6 +78,7 @@ class HomeViewModel @Inject constructor(
             repository.delete(alarm)
             analyticsLogger.logAlarmDeleted(
                 challengeCount = alarm.analyticsChallengeCount(),
+                challengeTypes = alarm.analyticsChallengeTypes(),
                 isRepeating = alarm.daysOfWeek.isNotEmpty()
             )
         }
@@ -147,5 +149,9 @@ class HomeViewModel @Inject constructor(
 
     private fun Alarm.analyticsChallengeCount(): Int {
         return challengeTypes.count { it != ChallengeType.NONE }
+    }
+
+    private fun Alarm.analyticsChallengeTypes(): String {
+        return challengeTypes.joinToString(",") { it.name }
     }
 }

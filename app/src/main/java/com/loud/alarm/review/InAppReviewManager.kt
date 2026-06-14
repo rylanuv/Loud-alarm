@@ -15,9 +15,10 @@ import kotlin.coroutines.suspendCoroutine
  * Manages the Google Play In-App Review flow.
  *
  * Strategy:
- * - Only prompt after the user has successfully dismissed at least [DISMISS_THRESHOLD] alarms,
- *   proving they are a genuine, engaged user.
- * - Only prompt once. If the review sheet has been shown before, never show again.
+ * - First prompt after the user has successfully dismissed at least
+ *   [FIRST_DISMISS_THRESHOLD] alarms, proving they are a genuine, engaged user.
+ * - After each review attempt, wait [REPEAT_DISMISS_INTERVAL] more successful
+ *   dismissals before requesting again.
  * - The prompt is shown when the user returns to the HomeScreen after dismissing an alarm,
  *   which is a calm, positive moment (they just woke up successfully).
  */
@@ -27,34 +28,38 @@ class InAppReviewManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "InAppReviewManager"
-        private const val DISMISS_THRESHOLD = 7
+        private const val FIRST_DISMISS_THRESHOLD = 4
+        private const val REPEAT_DISMISS_INTERVAL = 40
     }
 
     /**
      * Returns true if the conditions are met to show the review prompt:
-     * - User has dismissed >= [DISMISS_THRESHOLD] alarms
-     * - Review prompt has not been shown before
+     * - User has dismissed at least the next scheduled dismiss milestone
      */
     suspend fun shouldRequestReview(): Boolean {
         val dismissCount = settingsRepository.alarmDismissCount.first()
-        val reviewAlreadyShown = settingsRepository.reviewShown.first()
+        val nextMilestone = getOrInitializeNextMilestone(dismissCount)
 
-        Log.d(TAG, "shouldRequestReview: dismissCount=$dismissCount, reviewAlreadyShown=$reviewAlreadyShown")
+        Log.d(TAG, "shouldRequestReview: dismissCount=$dismissCount, nextMilestone=$nextMilestone")
 
-        return dismissCount >= DISMISS_THRESHOLD && !reviewAlreadyShown
+        return dismissCount >= nextMilestone
     }
 
     /**
      * Launches the Google Play In-App Review flow.
      * Must be called from an Activity context.
-     * Marks the review as shown regardless of whether the user actually left a review
-     * (Google does not tell us the outcome for anti-manipulation reasons).
+     * Advances the next review milestone regardless of whether the user actually left a
+     * review, because Google does not reveal the outcome of the review flow.
      */
     suspend fun requestReview(activity: Activity) {
         if (!shouldRequestReview()) {
             Log.d(TAG, "Conditions not met for review. Skipping.")
             return
         }
+
+        val currentDismissCount = settingsRepository.alarmDismissCount.first()
+        val currentMilestone = getOrInitializeNextMilestone(currentDismissCount)
+        val nextMilestone = calculateNextDismissMilestone(currentDismissCount)
 
         try {
             val reviewManager = ReviewManagerFactory.create(activity)
@@ -68,8 +73,8 @@ class InAppReviewManager @Inject constructor(
 
             Log.d(TAG, "Review flow info obtained. Launching review dialog...")
 
-            // Mark as shown BEFORE launching (in case the activity is destroyed)
-            settingsRepository.setReviewShown(true)
+            // Advance the milestone before launching in case the activity is destroyed.
+            settingsRepository.setNextReviewDismissMilestone(nextMilestone)
 
             // Launch the review flow
             suspendCoroutine { cont ->
@@ -80,8 +85,32 @@ class InAppReviewManager @Inject constructor(
             Log.d(TAG, "Review flow completed.")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch review flow", e)
-            // Don't mark as shown on failure — let it retry next time
-            settingsRepository.setReviewShown(false)
+            // Restore the current milestone so the app can retry next time.
+            settingsRepository.setNextReviewDismissMilestone(currentMilestone)
         }
+    }
+
+    private fun calculateNextDismissMilestone(currentDismissCount: Int): Int {
+        return if (currentDismissCount < FIRST_DISMISS_THRESHOLD) {
+            FIRST_DISMISS_THRESHOLD
+        } else {
+            currentDismissCount + REPEAT_DISMISS_INTERVAL
+        }
+    }
+
+    private suspend fun getOrInitializeNextMilestone(dismissCount: Int): Int {
+        val storedMilestone = settingsRepository.nextReviewDismissMilestone.first()
+        if (storedMilestone > 0) {
+            return storedMilestone
+        }
+
+        val initialMilestone = if (settingsRepository.reviewShown.first()) {
+            dismissCount + REPEAT_DISMISS_INTERVAL
+        } else {
+            FIRST_DISMISS_THRESHOLD
+        }
+
+        settingsRepository.setNextReviewDismissMilestone(initialMilestone)
+        return initialMilestone
     }
 }

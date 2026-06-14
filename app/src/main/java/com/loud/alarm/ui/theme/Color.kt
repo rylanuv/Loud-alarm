@@ -29,6 +29,7 @@ val Pink40 = ErrorRed
 val IconBlue = Color(0xFF4285F4)
 val IconRed = Color(0xFFEA4335)
 val IconGreen = Color(0xFF34A853)
+val IconLightGreen = Color(0xFF8BC34A)
 val IconYellow = Color(0xFFFBBC05)
 val IconOrange = Color(0xFFFF9800)
 val IconPurple = Color(0xFFD500F9) // Brighter purple for dark mode

@@ -45,3 +45,10 @@ build/
 app/build/
 *.apk
 *.aab
+
+# IDE local settings
+.idea/deploymentTargetSelector.xml
+
+# Root screenshots
+/*.png
+

@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.sqrt
 
 private const val TARGET_SHAKES = 12
-private const val SHAKE_THRESHOLD = 8.7f
+private const val SHAKE_THRESHOLD = 14.0f
 private const val SHAKE_DEBOUNCE_MS = 300L
 private const val SENSOR_WARMUP_MS = 500L
 private const val GRAVITY_ALPHA = 0.8f

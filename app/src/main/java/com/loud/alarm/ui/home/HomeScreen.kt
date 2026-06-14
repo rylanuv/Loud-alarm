@@ -97,6 +97,18 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Home-specific background image + overlay
+        Image(
+            painter = painterResource(id = R.drawable.menu),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.4f))
+        )
 
         Scaffold(
             topBar = {
@@ -487,6 +499,7 @@ fun AlarmItemContent(
                                 ChallengeType.MAZE -> "Maze"
                                 ChallengeType.MEMORY -> "Memory"
                                 ChallengeType.SHAKE -> "Shake"
+                                ChallengeType.TAP_CHALLENGE -> "Tap"
                                 ChallengeType.SPELL_BEE -> "Spell Bee"
                                 ChallengeType.PUZZLE -> "Puzzle"
                                 ChallengeType.SCAN_SINK -> "Scan Sink"

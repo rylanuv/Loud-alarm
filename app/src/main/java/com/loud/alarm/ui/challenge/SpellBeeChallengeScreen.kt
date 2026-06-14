@@ -25,15 +25,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-
-private const val SPELL_BEE_ROUNDS = 3
+import com.loud.alarm.data.MathDifficulty
 
 private data class SpellBeeWord(
     val word: String,
     val hint: String
 )
 
-private val SPELL_BEE_WORDS = listOf(
+// Easy: 5-6 letter words
+private val EASY_WORDS = listOf(
     SpellBeeWord("sunrise", "First light of the morning"),
     SpellBeeWord("journey", "A trip from one place to another"),
     SpellBeeWord("thunder", "Loud sound after lightning"),
@@ -48,6 +48,76 @@ private val SPELL_BEE_WORDS = listOf(
     SpellBeeWord("balance", "Steady and even position")
 )
 
+// Medium: 6-8 letter words
+private val MEDIUM_WORDS = listOf(
+    SpellBeeWord("balanced", "Equal on all sides"),
+    SpellBeeWord("calendar", "Tracks days and months"),
+    SpellBeeWord("daughter", "A female child"),
+    SpellBeeWord("elephant", "Largest land animal"),
+    SpellBeeWord("friendly", "Kind and pleasant"),
+    SpellBeeWord("gathered", "Brought together"),
+    SpellBeeWord("harmless", "Not causing any damage"),
+    SpellBeeWord("industry", "Manufacturing sector"),
+    SpellBeeWord("judgment", "Ability to decide wisely"),
+    SpellBeeWord("keyboard", "Used for typing"),
+    SpellBeeWord("language", "System of communication"),
+    SpellBeeWord("midnight", "12 o'clock at night"),
+    SpellBeeWord("neighbor", "Person living next door"),
+    SpellBeeWord("obstacle", "Something in the way"),
+    SpellBeeWord("pleasant", "Giving a sense of comfort")
+)
+
+// Hard: 8-10 letter words
+private val HARD_WORDS = listOf(
+    SpellBeeWord("adventure", "An exciting experience"),
+    SpellBeeWord("beautiful", "Pleasing to the eye"),
+    SpellBeeWord("chocolate", "Popular sweet treat"),
+    SpellBeeWord("dangerous", "Likely to cause harm"),
+    SpellBeeWord("education", "Process of learning"),
+    SpellBeeWord("furniture", "Tables, chairs, and beds"),
+    SpellBeeWord("guarantee", "A promise of quality"),
+    SpellBeeWord("happiness", "State of being happy"),
+    SpellBeeWord("immediate", "Happening right now"),
+    SpellBeeWord("knowledge", "Facts and information"),
+    SpellBeeWord("landscape", "View of the scenery"),
+    SpellBeeWord("necessary", "Absolutely required"),
+    SpellBeeWord("operation", "A planned activity"),
+    SpellBeeWord("passenger", "Someone riding in a vehicle"),
+    SpellBeeWord("recognize", "Identify from before"),
+    SpellBeeWord("electrical", "Related to electricity")
+)
+
+// Extreme: 10+ letter words
+private val EXTREME_WORDS = listOf(
+    SpellBeeWord("acknowledge", "Accept or admit"),
+    SpellBeeWord("anniversary", "Yearly celebration"),
+    SpellBeeWord("catastrophe", "A sudden disaster"),
+    SpellBeeWord("distinguish", "Tell apart from others"),
+    SpellBeeWord("embarrassed", "Feeling self-conscious"),
+    SpellBeeWord("environment", "Surrounding conditions"),
+    SpellBeeWord("furthermore", "In addition to that"),
+    SpellBeeWord("handkerchief", "Cloth for wiping your nose"),
+    SpellBeeWord("independence", "Freedom from control"),
+    SpellBeeWord("nevertheless", "In spite of that"),
+    SpellBeeWord("particularly", "Especially or notably"),
+    SpellBeeWord("questionnaire", "A set of survey questions"),
+    SpellBeeWord("refrigerator", "Keeps food cold"),
+    SpellBeeWord("sophisticated", "Complex and refined"),
+    SpellBeeWord("extraordinary", "Beyond what is usual"),
+    SpellBeeWord("uncomfortable", "Not at ease physically")
+)
+
+private fun getWordsForDifficulty(difficulty: MathDifficulty): List<SpellBeeWord> {
+    return when (difficulty) {
+        MathDifficulty.EASY -> EASY_WORDS
+        MathDifficulty.MEDIUM -> MEDIUM_WORDS
+        MathDifficulty.HARD -> HARD_WORDS
+        MathDifficulty.EXTREME -> EXTREME_WORDS
+    }
+}
+
+
+
 private fun scrambleWord(word: String): String {
     if (word.length < 2) return word.uppercase()
     var scrambled = word
@@ -61,9 +131,13 @@ private fun scrambleWord(word: String): String {
 }
 
 @Composable
-fun SpellBeeChallengeScreen(onSuccess: () -> Unit) {
+fun SpellBeeChallengeScreen(
+    difficulty: MathDifficulty = MathDifficulty.EASY,
+    rounds: Int = 3,
+    onSuccess: () -> Unit
+) {
     val sessionWords = remember {
-        SPELL_BEE_WORDS.shuffled().take(SPELL_BEE_ROUNDS)
+        getWordsForDifficulty(difficulty).shuffled().take(rounds)
     }
     var currentRound by rememberSaveable { mutableStateOf(0) }
     var answer by rememberSaveable { mutableStateOf("") }
@@ -102,9 +176,15 @@ fun SpellBeeChallengeScreen(onSuccess: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Round ${currentRound + 1} / $SPELL_BEE_ROUNDS",
+            text = "Round ${currentRound + 1} / $rounds",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = difficulty.name.lowercase().replaceFirstChar { it.uppercase() },
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White.copy(alpha = 0.5f)
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(

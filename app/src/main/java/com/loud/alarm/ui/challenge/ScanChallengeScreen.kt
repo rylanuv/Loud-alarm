@@ -687,6 +687,36 @@ private fun containsPhrase(text: String, phrase: String): Boolean {
     return Regex("\\b${Regex.escape(phrase)}\\b").containsMatchIn(text)
 }
 
+internal fun hasTargetLabelMatch(
+    labels: Iterable<Pair<String, Float>>,
+    targetLabel: String
+): Boolean {
+    return findBestDetectionMatch(labels, targetLabel) != null
+}
+
+private fun findBestDetectionMatch(
+    labels: Iterable<Pair<String, Float>>,
+    targetLabel: String
+): DetectionMatch? {
+    return labels
+        .mapNotNull { (detectedText, confidence) ->
+            val rule = evaluateLabelMatch(detectedText, targetLabel)
+                ?: return@mapNotNull null
+            DetectionMatch(
+                detectedText = detectedText,
+                confidence = confidence,
+                requiredConfidence = rule.requiredConfidence,
+                reason = rule.reason,
+                priority = rule.priority
+            )
+        }
+        .filter { candidate -> candidate.confidence >= candidate.requiredConfidence }
+        .maxWithOrNull(
+            compareBy<DetectionMatch> { it.priority }
+                .thenBy { it.confidence }
+        )
+}
+
 /**
  * Challenge screen that uses ML Kit Image Labeling to detect objects via
  * the camera. Image Labeling identifies what the camera sees, and we match
@@ -1316,23 +1346,10 @@ class DirectImageLabelAnalyzer(
                 }
 
                 // Check all target-specific labels that also clear their required threshold.
-                val match = labels
-                    .mapNotNull { label ->
-                        val rule = evaluateLabelMatch(label.text, targetLabel)
-                            ?: return@mapNotNull null
-                        DetectionMatch(
-                            detectedText = label.text,
-                            confidence = label.confidence,
-                            requiredConfidence = rule.requiredConfidence,
-                            reason = rule.reason,
-                            priority = rule.priority
-                        )
-                    }
-                    .filter { candidate -> candidate.confidence >= candidate.requiredConfidence }
-                    .maxWithOrNull(
-                        compareBy<DetectionMatch> { it.priority }
-                            .thenBy { it.confidence }
-                    )
+                val match = findBestDetectionMatch(
+                    labels.map { it.text to it.confidence },
+                    targetLabel
+                )
 
                 val matched = match != null
 

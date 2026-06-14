@@ -188,6 +188,27 @@ object DatabaseModule {
                 db.execSQL("ALTER TABLE alarms ADD COLUMN squatDetectionMode TEXT NOT NULL DEFAULT 'CAMERA'")
             }
         }
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN tapCount INTEGER NOT NULL DEFAULT 30")
+            }
+        }
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN spellBeeDifficulty TEXT NOT NULL DEFAULT 'EASY'")
+                db.execSQL("ALTER TABLE alarms ADD COLUMN audioMemoryDifficulty TEXT NOT NULL DEFAULT 'EASY'")
+            }
+        }
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN spellBeeCount INTEGER NOT NULL DEFAULT 3")
+            }
+        }
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN audioMemoryChallengeCount INTEGER NOT NULL DEFAULT 3")
+            }
+        }
         return Room.databaseBuilder(
             context,
             AlarmDatabase::class.java,
@@ -211,7 +232,11 @@ object DatabaseModule {
             MIGRATION_15_16,
             MIGRATION_16_17,
             MIGRATION_17_18,
-            MIGRATION_18_19
+            MIGRATION_18_19,
+            MIGRATION_19_20,
+            MIGRATION_20_21,
+            MIGRATION_21_22,
+            MIGRATION_22_23
         )
         .build()
     }

@@ -76,26 +76,36 @@ import kotlin.math.sqrt
 
 private const val TAG = "PushUpChallenge"
 
-// Confidence thresholds
-private const val MIN_LANDMARK_CONFIDENCE = 0.50f
-private const val MIN_SUPPORT_LANDMARK_CONFIDENCE = 0.40f
+// Confidence thresholds — raised to prevent phantom detections
+private const val MIN_LANDMARK_CONFIDENCE = 0.65f
+private const val MIN_SUPPORT_LANDMARK_CONFIDENCE = 0.55f
 
 // Smoothing and timing
-private const val SIGNAL_SMOOTHING = 0.55f
-private const val MIN_REP_INTERVAL_MS = 800L
-private const val MIN_REP_DURATION_MS = 400L
+private const val SIGNAL_SMOOTHING = 0.60f
+private const val MIN_REP_INTERVAL_MS = 1000L
+private const val MIN_REP_DURATION_MS = 500L
 private const val MAX_REP_DURATION_MS = 8_000L
 
-// Travel thresholds (as fraction of body scale)
-private const val SIDE_VIEW_TRAVEL_RATIO = 0.18f
-private const val FRONT_VIEW_TRAVEL_RATIO = 0.12f
-private const val DIAGONAL_VIEW_TRAVEL_RATIO = 0.14f
-private const val MIN_TRAVEL_PX = 28f
+// Travel thresholds (as fraction of body scale) — raised to require real movement
+private const val SIDE_VIEW_TRAVEL_RATIO = 0.22f
+private const val FRONT_VIEW_TRAVEL_RATIO = 0.16f
+private const val DIAGONAL_VIEW_TRAVEL_RATIO = 0.18f
+private const val MIN_TRAVEL_PX = 40f
 
 // Angle detection: ratio of shoulder X-spread to shoulder-hip Y-distance
 // High ratio = front/back view, low ratio = side view
 private const val FRONT_VIEW_RATIO_THRESHOLD = 0.55f
 private const val SIDE_VIEW_RATIO_THRESHOLD = 0.25f
+
+// Body detection debounce: require N consecutive frames to switch state
+private const val BODY_VISIBLE_DEBOUNCE_FRAMES = 4
+private const val BODY_LOST_DEBOUNCE_FRAMES = 8
+
+// Elbow angle validation thresholds (degrees)
+// During the DOWN phase, at least one elbow must bend below this angle
+private const val ELBOW_BENT_ANGLE_MAX = 130f
+// Minimum number of landmarks required (shoulders + hips + at least one elbow)
+private const val MIN_REQUIRED_LANDMARKS = 5
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -401,7 +411,8 @@ private data class MotionSample(
     val primarySignal: Float,   // Main tracking value (shoulder Y for side, nose Y for front, fused for diagonal)
     val bodyScale: Float,       // Reference body dimension in pixels for threshold scaling
     val angle: CameraAngle,     // Detected camera angle
-    val confidence: Float       // Overall confidence of this sample
+    val confidence: Float,      // Overall confidence of this sample
+    val minElbowAngle: Float    // Minimum elbow angle detected (degrees, 180 = straight)
 )
 
 private class PushUpPoseAnalyzer(
@@ -432,6 +443,12 @@ private class PushUpPoseAnalyzer(
     private var lastPushUpMs = 0L
     private var lastAngle: CameraAngle? = null
     private var stableAngleCount = 0
+    private var minElbowAngleDuringRep = 180f  // Track minimum elbow angle during lowering
+
+    // Body detection debounce state
+    private var bodyCurrentlyTracked = false
+    private var consecutiveVisibleFrames = 0
+    private var consecutiveLostFrames = 0
 
     @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
@@ -479,13 +496,38 @@ private class PushUpPoseAnalyzer(
 
     private fun handlePose(pose: Pose, imageHeight: Float) {
         val sample = extractMotionSample(pose, imageHeight)
+
+        // --- Body detection debounce ---
         if (sample == null) {
-            resetTracking()
-            postFeedback(PushUpTrackingFeedback("Move so the camera can see your shoulders and body.", false))
+            consecutiveVisibleFrames = 0
+            consecutiveLostFrames++
+            if (bodyCurrentlyTracked && consecutiveLostFrames < BODY_LOST_DEBOUNCE_FRAMES) {
+                // Still within grace period — keep tracking, don't reset yet
+                postFeedback(PushUpTrackingFeedback("Keep your body in the camera view.", true))
+                return
+            }
+            // Body truly lost after debounce
+            if (bodyCurrentlyTracked) {
+                bodyCurrentlyTracked = false
+                resetTracking()
+            }
+            postFeedback(PushUpTrackingFeedback("Move so the camera can see your full body.", false))
             return
         }
 
-        // Detect if camera angle changed significantly — reset if so
+        // Sample is valid — update debounce counters
+        consecutiveLostFrames = 0
+        consecutiveVisibleFrames++
+        if (!bodyCurrentlyTracked) {
+            if (consecutiveVisibleFrames < BODY_VISIBLE_DEBOUNCE_FRAMES) {
+                postFeedback(PushUpTrackingFeedback("Detecting body... hold still.", false))
+                return
+            }
+            bodyCurrentlyTracked = true
+            resetTracking()
+        }
+
+        // --- Camera angle stability ---
         if (lastAngle != null && lastAngle != sample.angle) {
             stableAngleCount = 0
         } else {
@@ -494,7 +536,7 @@ private class PushUpPoseAnalyzer(
         lastAngle = sample.angle
 
         // Only process after angle is stable for a few frames
-        if (stableAngleCount < 3) {
+        if (stableAngleCount < 4) {
             postFeedback(PushUpTrackingFeedback("Adjusting to camera angle... hold still.", true))
             return
         }
@@ -532,13 +574,15 @@ private class PushUpPoseAnalyzer(
                     minOf(upSignal, smoothedSignal)
                 }
                 downSignal = smoothedSignal
+                minElbowAngleDuringRep = sample.minElbowAngle
 
                 val drop = smoothedSignal - upSignal
                 if (drop >= travelThreshold) {
                     phase = PushUpPhase.LOWERING
                     phaseStartedMs = nowMs
                     downSignal = smoothedSignal
-                    Log.d(TAG, "Phase -> LOWERING (angle=$angleLabel, drop=$drop, threshold=$travelThreshold)")
+                    minElbowAngleDuringRep = sample.minElbowAngle
+                    Log.d(TAG, "Phase -> LOWERING (angle=$angleLabel, drop=$drop, threshold=$travelThreshold, elbowAngle=${sample.minElbowAngle})")
                     postFeedback(PushUpTrackingFeedback("Good — now push back up!", true))
                 } else {
                     postFeedback(PushUpTrackingFeedback("Tracking ($angleLabel view). Lower your chest.", true))
@@ -547,16 +591,20 @@ private class PushUpPoseAnalyzer(
 
             PushUpPhase.LOWERING -> {
                 downSignal = max(downSignal, smoothedSignal)
+                minElbowAngleDuringRep = minOf(minElbowAngleDuringRep, sample.minElbowAngle)
 
                 val repDurationMs = nowMs - phaseStartedMs
                 val totalDrop = downSignal - upSignal
                 val riseFromBottom = downSignal - smoothedSignal
 
-                val returnMultiplier = 0.55f
-                val riseMultiplier = 0.65f
+                val returnMultiplier = 0.50f
+                val riseMultiplier = 0.60f
 
                 val returnedNearTop = smoothedSignal <= upSignal + travelThreshold * returnMultiplier
                 val roseEnough = riseFromBottom >= travelThreshold * riseMultiplier
+
+                // Validate elbow bend — if we can see elbows, they must actually bend
+                val elbowValid = minElbowAngleDuringRep <= ELBOW_BENT_ANGLE_MAX
 
                 if (repDurationMs > MAX_REP_DURATION_MS) {
                     resetTracking(smoothedSignal)
@@ -566,16 +614,22 @@ private class PushUpPoseAnalyzer(
                     totalDrop >= travelThreshold &&
                     roseEnough &&
                     returnedNearTop &&
+                    elbowValid &&
                     repDurationMs >= MIN_REP_DURATION_MS &&
                     nowMs - lastPushUpMs >= MIN_REP_INTERVAL_MS
                 ) {
                     lastPushUpMs = nowMs
-                    Log.d(TAG, "Push-up counted! (angle=$angleLabel, totalDrop=$totalDrop, rise=$riseFromBottom, duration=${repDurationMs}ms)")
+                    Log.d(TAG, "Push-up counted! (angle=$angleLabel, totalDrop=$totalDrop, rise=$riseFromBottom, elbowAngle=$minElbowAngleDuringRep, duration=${repDurationMs}ms)")
                     postPushUpDetected()
                     resetTracking(smoothedSignal)
                     postFeedback(PushUpTrackingFeedback("Rep counted! Keep going.", true))
                 } else {
-                    postFeedback(PushUpTrackingFeedback("Push back up to complete the rep.", true))
+                    val hint = if (!elbowValid && roseEnough && returnedNearTop) {
+                        "Bend your arms more during the push-up."
+                    } else {
+                        "Push back up to complete the rep."
+                    }
+                    postFeedback(PushUpTrackingFeedback(hint, true))
                 }
             }
         }
@@ -594,6 +648,10 @@ private class PushUpPoseAnalyzer(
         val leftHip = pose.getPoseLandmark(PoseLandmark.LEFT_HIP)
         val rightHip = pose.getPoseLandmark(PoseLandmark.RIGHT_HIP)
         val nose = pose.getPoseLandmark(PoseLandmark.NOSE)
+        val leftElbow = pose.getPoseLandmark(PoseLandmark.LEFT_ELBOW)
+        val rightElbow = pose.getPoseLandmark(PoseLandmark.RIGHT_ELBOW)
+        val leftWrist = pose.getPoseLandmark(PoseLandmark.LEFT_WRIST)
+        val rightWrist = pose.getPoseLandmark(PoseLandmark.RIGHT_WRIST)
 
         // Need at least one shoulder with decent confidence
         val shoulders = listOfNotNull(leftShoulder, rightShoulder)
@@ -603,9 +661,24 @@ private class PushUpPoseAnalyzer(
         val hips = listOfNotNull(leftHip, rightHip)
             .filter { it.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE }
 
+        // Require at least hips OR elbows to be visible — just shoulders/nose is not enough
+        val elbows = listOfNotNull(leftElbow, rightElbow)
+            .filter { it.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE }
+        if (hips.isEmpty() && elbows.isEmpty()) return null
+
+        // Count total high-confidence landmarks — need enough for reliable detection
+        val allConfidentLandmarks = shoulders.size + hips.size + elbows.size
+        if (allConfidentLandmarks < 3) return null  // Need at least 3 good landmarks
+
         // Average positions of visible landmarks
         val avgShoulderX = shoulders.map { it.position.x }.average().toFloat()
         val avgShoulderY = shoulders.map { it.position.y }.average().toFloat()
+
+        // --- Compute elbow angle for validation ---
+        val minElbowAngle = computeMinElbowAngle(
+            leftShoulder, leftElbow, leftWrist,
+            rightShoulder, rightElbow, rightWrist
+        )
 
         // Determine camera angle from shoulder spread vs body height
         val angle: CameraAngle
@@ -681,21 +754,85 @@ private class PushUpPoseAnalyzer(
             confidence = shoulder.inFrameLikelihood +
                     supportLandmarks.sumOf { it.inFrameLikelihood.toDouble() }.toFloat()
         } else {
-            // Two shoulders but no hips — use shoulder Y, assume diagonal
+            // Two shoulders but no hips — need elbows at minimum for validation
+            if (elbows.isEmpty()) return null
             angle = CameraAngle.DIAGONAL
             bodyScale = abs(leftShoulder!!.position.x - rightShoulder!!.position.x) * 2f
             primarySignal = avgShoulderY
             confidence = shoulders.sumOf { it.inFrameLikelihood.toDouble() }.toFloat()
         }
 
-        if (bodyScale < 20f) return null // Body too small in frame
+        if (bodyScale < 30f) return null // Body too small in frame
 
         return MotionSample(
             primarySignal = primarySignal,
             bodyScale = bodyScale,
             angle = angle,
-            confidence = confidence
+            confidence = confidence,
+            minElbowAngle = minElbowAngle
         )
+    }
+
+    /**
+     * Compute the minimum elbow angle from both arms.
+     * Returns 180 (straight) if no valid arm landmarks are found.
+     * Elbow angle: shoulder -> elbow -> wrist.
+     */
+    private fun computeMinElbowAngle(
+        leftShoulder: PoseLandmark?, leftElbow: PoseLandmark?, leftWrist: PoseLandmark?,
+        rightShoulder: PoseLandmark?, rightElbow: PoseLandmark?, rightWrist: PoseLandmark?
+    ): Float {
+        var minAngle = 180f
+
+        // Left arm
+        if (leftShoulder != null && leftElbow != null && leftWrist != null &&
+            leftShoulder.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE &&
+            leftElbow.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE &&
+            leftWrist.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE
+        ) {
+            val angle = computeAngle(
+                leftShoulder.position.x, leftShoulder.position.y,
+                leftElbow.position.x, leftElbow.position.y,
+                leftWrist.position.x, leftWrist.position.y
+            )
+            minAngle = minOf(minAngle, angle)
+        }
+
+        // Right arm
+        if (rightShoulder != null && rightElbow != null && rightWrist != null &&
+            rightShoulder.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE &&
+            rightElbow.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE &&
+            rightWrist.inFrameLikelihood >= MIN_SUPPORT_LANDMARK_CONFIDENCE
+        ) {
+            val angle = computeAngle(
+                rightShoulder.position.x, rightShoulder.position.y,
+                rightElbow.position.x, rightElbow.position.y,
+                rightWrist.position.x, rightWrist.position.y
+            )
+            minAngle = minOf(minAngle, angle)
+        }
+
+        return minAngle
+    }
+
+    /**
+     * Compute the angle at point B formed by line segments BA and BC, in degrees.
+     */
+    private fun computeAngle(
+        ax: Float, ay: Float,
+        bx: Float, by: Float,
+        cx: Float, cy: Float
+    ): Float {
+        val baX = ax - bx
+        val baY = ay - by
+        val bcX = cx - bx
+        val bcY = cy - by
+        val dotProduct = baX * bcX + baY * bcY
+        val magBA = sqrt(baX * baX + baY * baY)
+        val magBC = sqrt(bcX * bcX + bcY * bcY)
+        if (magBA < 0.001f || magBC < 0.001f) return 180f
+        val cosAngle = (dotProduct / (magBA * magBC)).coerceIn(-1f, 1f)
+        return Math.toDegrees(kotlin.math.acos(cosAngle).toDouble()).toFloat()
     }
 
     private fun resetTracking(startSignal: Float = Float.NaN) {
@@ -704,6 +841,7 @@ private class PushUpPoseAnalyzer(
         smoothedSignal = startSignal
         upSignal = startSignal
         downSignal = startSignal
+        minElbowAngleDuringRep = 180f
     }
 
     private fun postFeedback(feedback: PushUpTrackingFeedback) {

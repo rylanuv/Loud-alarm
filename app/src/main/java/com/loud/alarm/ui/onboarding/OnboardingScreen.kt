@@ -835,27 +835,32 @@ private fun MorningMomentumCard() {
                     .fillMaxWidth()
                     .padding(horizontal = 18.dp, vertical = 20.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IntroModeChip(
-                        label = "OLD PATTERN",
-                        accent = Color(0xFFFFBF72)
-                    )
-                    IntroModeChip(
-                        label = "SOLVE2WAKE",
-                        accent = Color(0xFF65F0BE)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Easy alarms are easy to cheat. This path locks in your morning.",
+                    text = "Easy alarms are easy to cheat. This alarm locks in your morning.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.8f),
                     fontWeight = FontWeight.Medium
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        IntroModeChip(
+                            label = "OLD PATTERN",
+                            accent = Color(0xFFFFBF72)
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        IntroModeChip(
+                            label = "SOLVE TO WAKE",
+                            accent = Color(0xFF65F0BE)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(18.dp))
 

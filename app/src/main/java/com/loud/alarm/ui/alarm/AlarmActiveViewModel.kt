@@ -48,6 +48,7 @@ class AlarmActiveViewModel @Inject constructor(
                     _alarm.value = loaded
                     analyticsLogger.logAlarmTriggered(
                         challengeCount = loaded.analyticsChallengeCount(),
+                        challengeTypes = loaded.analyticsChallengeTypes(),
                         wakeUpCheckMinutes = loaded.wakeUpCheckMinutes
                     )
                 }
@@ -67,7 +68,8 @@ class AlarmActiveViewModel @Inject constructor(
             scheduler.scheduleSnooze(alarm, minutes)
             analyticsLogger.logAlarmSnoozed(
                 minutes = minutes,
-                challengeCount = alarm.analyticsChallengeCount()
+                challengeCount = alarm.analyticsChallengeCount(),
+                challengeTypes = alarm.analyticsChallengeTypes()
             )
             Log.d(TAG, "Snoozed alarm ${alarm.id} for $minutes minutes")
         }
@@ -76,11 +78,16 @@ class AlarmActiveViewModel @Inject constructor(
     fun logAlarmDismissed(alarm: Alarm) {
         analyticsLogger.logAlarmDismissed(
             challengeCount = alarm.analyticsChallengeCount(),
+            challengeTypes = alarm.analyticsChallengeTypes(),
             wakeUpCheckMinutes = alarm.wakeUpCheckMinutes
         )
     }
 
     private fun Alarm.analyticsChallengeCount(): Int {
         return challengeTypes.count { it != ChallengeType.NONE }
+    }
+
+    private fun Alarm.analyticsChallengeTypes(): String {
+        return challengeTypes.joinToString(",") { it.name }
     }
 }

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.MathDifficulty
+import com.loud.alarm.data.SquatDetectionMode
 import com.loud.alarm.service.AlarmService
 import com.loud.alarm.ui.challenge.QrCodeChallengeScreen
 import com.loud.alarm.ui.challenge.MathChallengeScreen
@@ -80,7 +82,9 @@ import com.loud.alarm.ui.challenge.SquatChallengeScreen
 import com.loud.alarm.ui.challenge.PushUpChallengeScreen
 import com.loud.alarm.ui.challenge.ReverseTypingChallengeScreen
 import com.loud.alarm.ui.challenge.AudioMemoryChallengeScreen
+import com.loud.alarm.ui.challenge.ChargerChallengeScreen
 import com.loud.alarm.ui.challenge.RandomObjectPickerScreen
+import com.loud.alarm.ui.challenge.TapChallengeScreen
 import com.loud.alarm.ui.home.formatTime
 import com.loud.alarm.ui.home.getAmPm
 import com.loud.alarm.ui.theme.LoudAlarmTheme
@@ -99,16 +103,77 @@ class AlarmActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "AlarmActivity"
+        const val EXTRA_PREVIEW_MODE = "extra_preview_mode"
+        const val EXTRA_PREVIEW_CHALLENGE = "extra_preview_challenge"
         @Volatile
         var isAlarmScreenVisible: Boolean = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // showOnLockScreen uses window flags, safe before super
-        showOnLockScreen()
+        val isPreview = intent.getBooleanExtra(EXTRA_PREVIEW_MODE, false)
+        if (!isPreview) showOnLockScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
+        if (isPreview) {
+            val startPreviewIntent = Intent(this, AlarmService::class.java).apply {
+                action = AlarmService.ACTION_PREVIEW_ALARM
+                putExtra(AlarmService.EXTRA_IS_VOLUME_BOOST_ENABLED, intent.getBooleanExtra("isVolumeBoostEnabled", false))
+                putExtra("EXTRA_SOUND_URI", intent.getStringExtra("soundUri"))
+            }
+            startService(startPreviewIntent)
+
+            // Preview mode: build a temporary alarm from current editor state
+            val challengeName = intent.getStringExtra(EXTRA_PREVIEW_CHALLENGE) ?: ChallengeType.MATH.name
+            val challengeType = try { ChallengeType.valueOf(challengeName) } catch (_: Exception) { ChallengeType.MATH }
+            val previewAlarm = Alarm(
+                id = -999,
+                hour = 0, minute = 0, enabled = false,
+                challengeTypes = setOf(challengeType),
+                mathDifficulty = MathDifficulty.valueOf(intent.getStringExtra("mathDifficulty") ?: "EASY"),
+                mathQuestionCount = intent.getIntExtra("mathQuestionCount", 3),
+                mazeDifficulty = MathDifficulty.valueOf(intent.getStringExtra("mazeDifficulty") ?: "EASY"),
+                puzzleDifficulty = MathDifficulty.valueOf(intent.getStringExtra("puzzleDifficulty") ?: "EASY"),
+                memoryDifficulty = MathDifficulty.valueOf(intent.getStringExtra("memoryDifficulty") ?: "EASY"),
+                memoryChallengeCount = intent.getIntExtra("memoryChallengeCount", 1),
+                stepCount = intent.getIntExtra("stepCount", 20),
+                shakeCount = intent.getIntExtra("shakeCount", 30),
+                tapCount = intent.getIntExtra("tapCount", 30),
+                squatCount = intent.getIntExtra("squatCount", 10),
+                squatDetectionMode = SquatDetectionMode.valueOf(intent.getStringExtra("squatDetectionMode") ?: "CAMERA"),
+                pushUpCount = intent.getIntExtra("pushUpCount", 10),
+                reverseTypingCount = intent.getIntExtra("reverseTypingCount", 2),
+                rewriteText = intent.getStringExtra("rewriteText") ?: "",
+                barcodeValue = intent.getStringExtra("barcodeValue"),
+                scanObjectLabel = intent.getStringExtra("scanObjectLabel") ?: "RANDOM",
+                scanObjectExcluded = intent.getStringArrayListExtra("scanObjectExcluded")?.toSet() ?: emptySet(),
+                spellBeeDifficulty = MathDifficulty.valueOf(intent.getStringExtra("spellBeeDifficulty") ?: "EASY"),
+                spellBeeCount = intent.getIntExtra("spellBeeCount", 3),
+                audioMemoryDifficulty = MathDifficulty.valueOf(intent.getStringExtra("audioMemoryDifficulty") ?: "EASY"),
+                audioMemoryChallengeCount = intent.getIntExtra("audioMemoryChallengeCount", 1)
+            )
+            setContent {
+                LoudAlarmTheme(darkTheme = true) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        ActiveAlarmScreen(
+                            alarm = previewAlarm,
+                            snoozeEnabled = false,
+                            viewModel = viewModel,
+                            isPreview = true,
+                            onStopAlarmSound = {
+                                stopAlarmService()
+                            },
+                            onDismissActivity = { 
+                                stopAlarmService()
+                                finish() 
+                            }
+                        )
+                    }
+                }
+            }
+            return
+        }
+
         val alarmId = intent.getIntExtra(AlarmService.EXTRA_ALARM_ID, -1)
         Log.d(TAG, "AlarmActivity onCreate, alarmId=$alarmId")
         if (alarmId != -1) {
@@ -116,7 +181,7 @@ class AlarmActivity : ComponentActivity() {
         }
 
         setContent {
-            LoudAlarmTheme(darkTheme = true) { // Always dark for alarm ringing
+            LoudAlarmTheme(darkTheme = true) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -131,6 +196,9 @@ class AlarmActivity : ComponentActivity() {
                             alarm = alarmState!!,
                             snoozeEnabled = snoozeEnabled,
                             viewModel = viewModel,
+                            onStopAlarmSound = {
+                                stopAlarmService()
+                            },
                             onDismissActivity = {
                                 alarmFlowCompleted = true
                                 viewModel.logAlarmDismissed(alarmState!!)
@@ -184,8 +252,6 @@ class AlarmActivity : ComponentActivity() {
             }
         }
 
-        // hideSystemUI must be called AFTER super.onCreate() and setContent
-        // because it needs the DecorView to exist
         hideSystemUI()
     }
 
@@ -275,6 +341,12 @@ class AlarmActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (!alarmFlowCompleted) {
+            val isPreview = intent.getBooleanExtra(EXTRA_PREVIEW_MODE, false)
+            if (isPreview) {
+                stopAlarmService()
+                finish()
+                return
+            }
             val alarmId = intent.getIntExtra(AlarmService.EXTRA_ALARM_ID, -1)
             Log.w(TAG, "User pressed Home on alarm screen; closing and requesting re-show")
             if (alarmId != -1) {
@@ -285,6 +357,14 @@ class AlarmActivity : ComponentActivity() {
                 startService(reshowIntent)
             }
             finish()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        val isPreview = intent.getBooleanExtra(EXTRA_PREVIEW_MODE, false)
+        if (isPreview) {
+            stopAlarmService()
         }
     }
 
@@ -336,6 +416,8 @@ fun ActiveAlarmScreen(
     alarm: Alarm,
     snoozeEnabled: Boolean,
     viewModel: AlarmActiveViewModel,
+    isPreview: Boolean = false,
+    onStopAlarmSound: () -> Unit = {},
     onDismissActivity: () -> Unit
 ) {
     Log.d("ActiveAlarmScreen", "=== RENDERING === alarm.id=${alarm.id}, challengeTypes=${alarm.challengeTypes}")
@@ -344,7 +426,6 @@ fun ActiveAlarmScreen(
     key(alarm.id) {
         var mathSolved by rememberSaveable { mutableStateOf(false) }
         var barcodeScanned by rememberSaveable { mutableStateOf(false) }
-        var useMathFallback by rememberSaveable { mutableStateOf(false) }
         var useScanSinkMathFallback by rememberSaveable { mutableStateOf(false) }
         var useScanObjectMathFallback by rememberSaveable { mutableStateOf(false) }
         var rewriteSolved by remember { mutableStateOf(false) }
@@ -352,6 +433,7 @@ fun ActiveAlarmScreen(
         var mazeSolved by remember { mutableStateOf(false) }
         var memorySolved by remember { mutableStateOf(false) }
         var shakeSolved by rememberSaveable { mutableStateOf(false) }
+        var tapSolved by rememberSaveable { mutableStateOf(false) }
         var scanSinkSolved by remember { mutableStateOf(false) }
         var scanObjectSolved by remember { mutableStateOf(false) }
         var spellBeeSolved by rememberSaveable { mutableStateOf(false) }
@@ -360,6 +442,7 @@ fun ActiveAlarmScreen(
         var pushUpSolved by rememberSaveable { mutableStateOf(false) }
         var reverseTypingSolved by rememberSaveable { mutableStateOf(false) }
         var audioMemorySolved by rememberSaveable { mutableStateOf(false) }
+        var chargerSolved by rememberSaveable { mutableStateOf(false) }
         
         var isRingingScreenDismissed by rememberSaveable { mutableStateOf(false) }
         var pendingSnoozeMinutes by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -380,6 +463,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.MAZE -> mazeSolved
                 ChallengeType.MEMORY -> memorySolved
                 ChallengeType.SHAKE -> shakeSolved
+                ChallengeType.TAP_CHALLENGE -> tapSolved
                 ChallengeType.SCAN_SINK -> scanSinkSolved
                 ChallengeType.SCAN_OBJECT -> scanObjectSolved
                 ChallengeType.SPELL_BEE -> spellBeeSolved
@@ -388,6 +472,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.PUSH_UP -> pushUpSolved
                 ChallengeType.REVERSE_TYPING -> reverseTypingSolved
                 ChallengeType.AUDIO_MEMORY -> audioMemorySolved
+                ChallengeType.CHARGER -> chargerSolved
                 ChallengeType.NONE -> true
             }
         }
@@ -402,6 +487,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.MAZE -> !mazeSolved
                 ChallengeType.MEMORY -> !memorySolved
                 ChallengeType.SHAKE -> !shakeSolved
+                ChallengeType.TAP_CHALLENGE -> !tapSolved
                 ChallengeType.SCAN_SINK -> !scanSinkSolved
                 ChallengeType.SCAN_OBJECT -> !scanObjectSolved
                 ChallengeType.SPELL_BEE -> !spellBeeSolved
@@ -410,11 +496,12 @@ fun ActiveAlarmScreen(
                 ChallengeType.PUSH_UP -> !pushUpSolved
                 ChallengeType.REVERSE_TYPING -> !reverseTypingSolved
                 ChallengeType.AUDIO_MEMORY -> !audioMemorySolved
+                ChallengeType.CHARGER -> !chargerSolved
                 ChallengeType.NONE -> false
             }
         }
 
-        Log.d("ActiveAlarmScreen", "mathSolved=$mathSolved, barcodeScanned=$barcodeScanned, shakeSolved=$shakeSolved, useMathFallback=$useMathFallback, isChallengeComplete=$isChallengeComplete")
+        Log.d("ActiveAlarmScreen", "mathSolved=$mathSolved, barcodeScanned=$barcodeScanned, shakeSolved=$shakeSolved, isChallengeComplete=$isChallengeComplete")
 
         LaunchedEffect(isRingingScreenDismissed, isChallengeComplete) {
             if (isRingingScreenDismissed && isChallengeComplete) {
@@ -422,12 +509,15 @@ fun ActiveAlarmScreen(
                     viewModel.snoozeAlarm(alarm, pendingSnoozeMinutes!!)
                     onDismissActivity()
                 } else if (activeChallenges.isNotEmpty()) {
+                    onStopAlarmSound()
                     showCongrats = true
                 } else {
                     onDismissActivity()
                 }
             }
         }
+
+        // Preview mode now acts exactly like the real alarm and shows the Dismiss/Snooze screen first
 
         if (showCongrats) {
             CongratsScreen(
@@ -458,20 +548,32 @@ fun ActiveAlarmScreen(
         } else if (!isChallengeComplete && currentChallenge != null) {
             Log.d("ActiveAlarmScreen", "Showing Challenge screen for type=$currentChallenge")
             // Show Challenge
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.error)
-                        .padding(16.dp),
+                        .background(if (isPreview) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                        .padding(horizontal = 16.dp, vertical = if (isPreview) 10.dp else 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        if (pendingSnoozeMinutes != null) "SOLVE TO SNOOZE" else "SOLVE TO DISMISS",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (isPreview) "PREVIEW MODE" else if (pendingSnoozeMinutes != null) "SOLVE TO SNOOZE" else "SOLVE TO DISMISS",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (isPreview) {
+                            OutlinedButton(
+                                onClick = onDismissActivity,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                            ) { Text("Close") }
+                        }
+                    }
                 }
 
                 Box(modifier = Modifier.weight(1f)) {
@@ -488,29 +590,14 @@ fun ActiveAlarmScreen(
                             )
                         }
                         ChallengeType.QR_CODE -> {
-                            if (useMathFallback) {
-                                Log.d("ActiveAlarmScreen", "Rendering MathChallengeScreen (QR code fallback)")
-                                MathChallengeScreen(
-                                    difficulty = MathDifficulty.MEDIUM,
-                                    onSuccess = {
-                                        Log.d("ActiveAlarmScreen", "Math fallback SOLVED!")
-                                        barcodeScanned = true
-                                    }
-                                )
-                            } else {
-                                Log.d("ActiveAlarmScreen", "Rendering QrCodeChallengeScreen")
-                                QrCodeChallengeScreen(
-                                    targetBarcodeValue = alarm.barcodeValue,
-                                    onSuccess = {
-                                        Log.d("ActiveAlarmScreen", "QR Code challenge SOLVED!")
-                                        barcodeScanned = true
-                                    },
-                                    onFallbackToMath = {
-                                        Log.d("ActiveAlarmScreen", "User chose math fallback for QR code")
-                                        useMathFallback = true
-                                    }
-                                )
-                            }
+                            Log.d("ActiveAlarmScreen", "Rendering QrCodeChallengeScreen")
+                            QrCodeChallengeScreen(
+                                targetBarcodeValue = alarm.barcodeValue,
+                                onSuccess = {
+                                    Log.d("ActiveAlarmScreen", "QR Code challenge SOLVED!")
+                                    barcodeScanned = true
+                                }
+                            )
                         }
                         ChallengeType.REWRITE -> {
                             com.loud.alarm.ui.challenge.RewriteChallengeScreen(
@@ -543,8 +630,16 @@ fun ActiveAlarmScreen(
                                 onSuccess = { shakeSolved = true }
                             )
                         }
+                        ChallengeType.TAP_CHALLENGE -> {
+                            TapChallengeScreen(
+                                targetTaps = alarm.tapCount,
+                                onSuccess = { tapSolved = true }
+                            )
+                        }
                         ChallengeType.SPELL_BEE -> {
                             SpellBeeChallengeScreen(
+                                difficulty = alarm.spellBeeDifficulty,
+                                rounds = alarm.spellBeeCount,
                                 onSuccess = { spellBeeSolved = true }
                             )
                         }
@@ -660,7 +755,14 @@ fun ActiveAlarmScreen(
                         }
                         ChallengeType.AUDIO_MEMORY -> {
                             AudioMemoryChallengeScreen(
+                                difficulty = alarm.audioMemoryDifficulty,
+                                challengeCount = alarm.audioMemoryChallengeCount,
                                 onSuccess = { audioMemorySolved = true }
+                            )
+                        }
+                        ChallengeType.CHARGER -> {
+                            ChargerChallengeScreen(
+                                onSuccess = { chargerSolved = true }
                             )
                         }
                         else -> {

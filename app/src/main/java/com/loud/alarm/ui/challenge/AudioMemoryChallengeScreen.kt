@@ -71,9 +71,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import com.loud.alarm.service.AlarmService
+import com.loud.alarm.data.MathDifficulty
 import java.util.Locale
 
-private const val AUDIO_MEMORY_ROUNDS = 2
+
+private fun getBaseWordCount(difficulty: MathDifficulty): Int {
+    return when (difficulty) {
+        MathDifficulty.EASY -> 3
+        MathDifficulty.MEDIUM -> 3
+        MathDifficulty.HARD -> 4
+        MathDifficulty.EXTREME -> 5
+    }
+}
 
 private val WORD_POOL = listOf(
     "apple", "river", "cloud", "chair", "light",
@@ -94,7 +103,13 @@ private val successGreen = Color(0xFF66BB6A)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AudioMemoryChallengeScreen(onSuccess: () -> Unit) {
+fun AudioMemoryChallengeScreen(
+    difficulty: MathDifficulty = MathDifficulty.EASY,
+    challengeCount: Int = 1,
+    onSuccess: () -> Unit
+) {
+    val totalRounds = remember { challengeCount }
+    val baseWordCount = remember { getBaseWordCount(difficulty) }
     val context = LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
@@ -155,23 +170,14 @@ fun AudioMemoryChallengeScreen(onSuccess: () -> Unit) {
     // Game state
     var currentRound by rememberSaveable { mutableIntStateOf(0) }
 
-    // Generate word sequences for all rounds up front
-    val allRoundWords = remember {
-        val rounds = mutableListOf<List<String>>()
-        val pool = WORD_POOL.shuffled().toMutableList()
-        for (r in 0 until AUDIO_MEMORY_ROUNDS) {
-            val count = 3 + r // 3 words, then 4 words
-            val words = pool.take(count)
-            pool.removeAll(words.toSet())
-            rounds.add(words)
-        }
-        rounds
+    // Generate words fresh for each round separately
+    val wordCount = remember(currentRound) { baseWordCount + currentRound }
+    val currentWords = remember(currentRound) {
+        WORD_POOL.shuffled().take(wordCount)
     }
 
-    val currentWords = allRoundWords[currentRound]
-
     // Shuffled options: correct words + distractors
-    val wordOptions = remember(currentRound) {
+    val wordOptions = remember(currentRound, currentWords) {
         val pool = WORD_POOL.toMutableList()
         pool.removeAll(currentWords.toSet())
         val distractors = pool.shuffled().take(currentWords.size + 1) // extra choices
@@ -261,7 +267,7 @@ fun AudioMemoryChallengeScreen(onSuccess: () -> Unit) {
     }
 
     val progress by animateFloatAsState(
-        targetValue = currentRound.toFloat() / AUDIO_MEMORY_ROUNDS,
+        targetValue = currentRound.toFloat() / totalRounds,
         animationSpec = tween(500),
         label = "progress"
     )
@@ -272,7 +278,7 @@ fun AudioMemoryChallengeScreen(onSuccess: () -> Unit) {
                     selectedWords[i].equals(currentWords[i], ignoreCase = true)
                 }
         if (isCorrect) {
-            if (currentRound == allRoundWords.lastIndex) {
+            if (currentRound == totalRounds - 1) {
                 onSuccess()
             } else {
                 currentRound += 1
@@ -339,7 +345,7 @@ fun AudioMemoryChallengeScreen(onSuccess: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Round ${currentRound + 1}/$AUDIO_MEMORY_ROUNDS",
+                    text = "Round ${currentRound + 1}/$totalRounds",
                     style = MaterialTheme.typography.labelLarge,
                     color = accentBlue,
                     fontWeight = FontWeight.SemiBold

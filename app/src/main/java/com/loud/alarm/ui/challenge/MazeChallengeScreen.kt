@@ -61,7 +61,7 @@ private fun gridSizeForDifficulty(d: MathDifficulty): Pair<Int, Int> = when (d) 
     MathDifficulty.EASY    -> 5 to 5
     MathDifficulty.MEDIUM  -> 6 to 6
     MathDifficulty.HARD    -> 7 to 7
-    MathDifficulty.EXTREME -> 8 to 8
+    MathDifficulty.EXTREME -> 10 to 10
 }
 
 /**
@@ -71,7 +71,18 @@ private fun deadEndCountForDifficulty(d: MathDifficulty): Int = when (d) {
     MathDifficulty.EASY    -> 3
     MathDifficulty.MEDIUM  -> 5
     MathDifficulty.HARD    -> 7
-    MathDifficulty.EXTREME -> 10
+    MathDifficulty.EXTREME -> 20
+}
+
+/**
+ * Maximum depth of each dead-end spur per difficulty.
+ * Higher values create longer misleading corridors.
+ */
+private fun deadEndDepthForDifficulty(d: MathDifficulty): Int = when (d) {
+    MathDifficulty.EASY    -> 2
+    MathDifficulty.MEDIUM  -> 2
+    MathDifficulty.HARD    -> 3
+    MathDifficulty.EXTREME -> 5
 }
 
 /**
@@ -116,6 +127,7 @@ private fun generateMaze(
     rows: Int,
     cols: Int,
     deadEndBranches: Int,
+    maxDeadEndDepth: Int = 2,
     rng: Random = Random
 ): List<String> {
     val gridH = 2 * rows + 1
@@ -212,7 +224,7 @@ private fun generateMaze(
         val extendDir = (openDir + 2) % 4  // opposite direction
         var curR = wr
         var curC = wc
-        val depth = rng.nextInt(1, 3)
+        val depth = rng.nextInt(1, maxDeadEndDepth.coerceAtLeast(2) + 1)
         for (step in 0 until depth) {
             val nr = curR + dirR[extendDir]
             val nc = curC + dirC[extendDir]
@@ -261,12 +273,13 @@ fun MazeChallengeScreen(
 ) {
     val (cellRows, cellCols) = remember(difficulty) { gridSizeForDifficulty(difficulty) }
     val deadEnds = remember(difficulty) { deadEndCountForDifficulty(difficulty) }
+    val deadEndDepth = remember(difficulty) { deadEndDepthForDifficulty(difficulty) }
 
     // Track regeneration key to allow reset
     var mazeKey by remember { mutableIntStateOf(0) }
 
     val mazeRows = remember(difficulty, mazeKey) {
-        generateMaze(cellRows, cellCols, deadEnds)
+        generateMaze(cellRows, cellCols, deadEnds, deadEndDepth)
     }
 
     val height = mazeRows.size

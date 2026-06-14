@@ -60,6 +60,7 @@ class AlarmService : Service() {
         const val ACTION_STOP_ALARM = "com.loud.alarm.action.STOP_ALARM"
         const val ACTION_RESHOW_ALARM = "com.loud.alarm.action.RESHOW_ALARM"
         const val ACTION_RESTART_ALARM_SERVICE = "com.loud.alarm.action.RESTART_ALARM_SERVICE"
+        const val ACTION_PREVIEW_ALARM = "com.loud.alarm.action.PREVIEW_ALARM"
         private const val TAG = "AlarmService"
         private const val STATE_PREFS = "alarm_service_state"
         private const val PREF_LAST_ALARM_ID = "last_alarm_id"
@@ -204,6 +205,51 @@ class AlarmService : Service() {
             stopRequested = true
             clearPersistedRingingContext()
             stopSelf()
+            return START_NOT_STICKY
+        }
+
+        if (intent?.action == ACTION_PREVIEW_ALARM) {
+            val isVolumeBoostEnabled = intent.getBooleanExtra(EXTRA_IS_VOLUME_BOOST_ENABLED, false)
+            val soundUri = intent.getStringExtra("EXTRA_SOUND_URI")
+            currentAlarmId = -1
+            currentVolumeBoostEnabled = isVolumeBoostEnabled
+            stopRequested = false
+            activeInstance = this
+            restartScheduled = false
+            Log.d(TAG, "AlarmService started for PREVIEW")
+            
+            Thread {
+                val isVibrationEnabled = readSettingOrDefault("vibrationEnabled", true) {
+                    kotlinx.coroutines.runBlocking { settingsRepository.vibrationEnabled.first() }
+                }
+                val isFadeInEnabled = readSettingOrDefault("fadeInEnabled", true) {
+                    kotlinx.coroutines.runBlocking { settingsRepository.fadeInEnabled.first() }
+                }
+                val fadeInDuration = readSettingOrDefault("fadeInDuration", 25) {
+                    kotlinx.coroutines.runBlocking { settingsRepository.fadeInDuration.first() }
+                }
+                val autoSilenceDuration = readSettingOrDefault("autoSilenceDuration", 30) {
+                    kotlinx.coroutines.runBlocking { settingsRepository.autoSilenceDuration.first() }
+                }
+                val vibrationPatternName = readSettingOrDefault(
+                    "vibrationPattern",
+                    VibrationPattern.DEVICE_DEFAULT.name
+                ) {
+                    kotlinx.coroutines.runBlocking { settingsRepository.vibrationPattern.first() }
+                }
+
+                Handler(Looper.getMainLooper()).post {
+                    startAlarm(
+                        isVolumeBoostEnabled = isVolumeBoostEnabled,
+                        isVibrationEnabled = isVibrationEnabled,
+                        isFadeInEnabled = isFadeInEnabled,
+                        fadeInDuration = fadeInDuration,
+                        autoSilenceDuration = autoSilenceDuration,
+                        vibrationPatternName = vibrationPatternName,
+                        selectedSoundUri = soundUri
+                    )
+                }
+            }.start()
             return START_NOT_STICKY
         }
 

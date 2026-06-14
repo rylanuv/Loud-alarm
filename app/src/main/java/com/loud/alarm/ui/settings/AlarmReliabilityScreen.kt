@@ -583,10 +583,15 @@ private fun Context.openNotificationSettings() {
 }
 
 private fun Context.launchFirstAvailable(intents: List<Intent>) {
-    intents.firstOrNull { intent ->
+    for (intent in intents) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        intent.resolveActivity(packageManager) != null
-    }?.let(::startActivity)
+        try {
+            startActivity(intent)
+            return
+        } catch (_: Exception) {
+            // ActivityNotFoundException, SecurityException, etc. — try next intent
+        }
+    }
 }
 
 private fun componentIntent(packageName: String, className: String): Intent {

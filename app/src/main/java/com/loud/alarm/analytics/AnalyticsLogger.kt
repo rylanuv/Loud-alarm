@@ -32,63 +32,69 @@ class AnalyticsLogger @Inject constructor(
         )
     }
 
-    fun logAlarmSaved(isNewAlarm: Boolean, challengeCount: Int, isRepeating: Boolean, wakeUpCheckMinutes: Int) {
+    fun logAlarmSaved(isNewAlarm: Boolean, challengeCount: Int, challengeTypes: String, isRepeating: Boolean, wakeUpCheckMinutes: Int) {
         logEvent(
             if (isNewAlarm) Event.ALARM_CREATED else Event.ALARM_UPDATED,
             mapOf(
                 Param.CHALLENGE_COUNT to challengeCount.toLong(),
+                Param.CHALLENGE_TYPES to challengeTypes,
                 Param.IS_REPEATING to isRepeating.toLongValue(),
                 Param.WAKE_UP_CHECK_MINUTES to wakeUpCheckMinutes.toLong()
             )
         )
     }
 
-    fun logAlarmToggled(enabled: Boolean, challengeCount: Int, isRepeating: Boolean) {
+    fun logAlarmToggled(enabled: Boolean, challengeCount: Int, challengeTypes: String, isRepeating: Boolean) {
         logEvent(
             if (enabled) Event.ALARM_ENABLED else Event.ALARM_DISABLED,
             mapOf(
                 Param.CHALLENGE_COUNT to challengeCount.toLong(),
+                Param.CHALLENGE_TYPES to challengeTypes,
                 Param.IS_REPEATING to isRepeating.toLongValue()
             )
         )
     }
 
-    fun logAlarmDeleted(challengeCount: Int, isRepeating: Boolean) {
+    fun logAlarmDeleted(challengeCount: Int, challengeTypes: String, isRepeating: Boolean) {
         logEvent(
             Event.ALARM_DELETED,
             mapOf(
                 Param.CHALLENGE_COUNT to challengeCount.toLong(),
+                Param.CHALLENGE_TYPES to challengeTypes,
                 Param.IS_REPEATING to isRepeating.toLongValue()
             )
         )
     }
 
-    fun logAlarmTriggered(challengeCount: Int, wakeUpCheckMinutes: Int) {
+    fun logAlarmTriggered(challengeCount: Int, challengeTypes: String, wakeUpCheckMinutes: Int) {
         logEvent(
             Event.ALARM_TRIGGERED,
             mapOf(
                 Param.CHALLENGE_COUNT to challengeCount.toLong(),
+                Param.CHALLENGE_TYPES to challengeTypes,
                 Param.WAKE_UP_CHECK_MINUTES to wakeUpCheckMinutes.toLong()
             )
         )
     }
 
-    fun logAlarmDismissed(challengeCount: Int, wakeUpCheckMinutes: Int) {
+    fun logAlarmDismissed(challengeCount: Int, challengeTypes: String, wakeUpCheckMinutes: Int) {
         logEvent(
             Event.ALARM_DISMISSED,
             mapOf(
                 Param.CHALLENGE_COUNT to challengeCount.toLong(),
+                Param.CHALLENGE_TYPES to challengeTypes,
                 Param.WAKE_UP_CHECK_MINUTES to wakeUpCheckMinutes.toLong()
             )
         )
     }
 
-    fun logAlarmSnoozed(minutes: Int, challengeCount: Int) {
+    fun logAlarmSnoozed(minutes: Int, challengeCount: Int, challengeTypes: String) {
         logEvent(
             Event.ALARM_SNOOZED,
             mapOf(
                 Param.SNOOZE_MINUTES to minutes.toLong(),
-                Param.CHALLENGE_COUNT to challengeCount.toLong()
+                Param.CHALLENGE_COUNT to challengeCount.toLong(),
+                Param.CHALLENGE_TYPES to challengeTypes
             )
         )
     }
@@ -162,6 +168,7 @@ class AnalyticsLogger @Inject constructor(
 
     private object Param {
         const val CHALLENGE_COUNT = "challenge_count"
+        const val CHALLENGE_TYPES = "challenge_types"
         const val IS_REPEATING = "is_repeating"
         const val WAKE_UP_CHECK_MINUTES = "wake_up_check_minutes"
         const val SNOOZE_MINUTES = "snooze_minutes"
