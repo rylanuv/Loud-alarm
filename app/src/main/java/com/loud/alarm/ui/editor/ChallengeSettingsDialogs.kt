@@ -527,12 +527,12 @@ fun getChallengePreviewInfo(type: ChallengeType): Pair<String, List<String>> {
         ChallengeType.SQUAT -> "Do squats tracked by camera or motion sensor." to listOf(
             "Camera-based pose tracking",
             "Motion sensor alternative",
-            "Adjustable squat targets (5-30)"
+            "Adjustable squat targets (5-100)"
         )
         ChallengeType.PUSH_UP -> "Do push-ups tracked by your front camera." to listOf(
             "AI pose detection",
             "Easy & Hard difficulty modes",
-            "Adjustable targets (5-30)"
+            "Adjustable targets (5-100)"
         )
         ChallengeType.REVERSE_TYPING -> "Type displayed words in reverse order." to listOf(
             "Multiple rounds available",
@@ -563,6 +563,12 @@ fun getChallengePreviewInfo(type: ChallengeType): Pair<String, List<String>> {
             "Forces you to get up and find a charger",
             "Must unplug and re-plug if already charging",
             "No extra permissions needed"
+        )
+        ChallengeType.CLOCK_READING -> "Read an analogue clock and type the time to dismiss." to listOf(
+            "Beautiful canvas-drawn clock face",
+            "4 difficulty levels",
+            "Configurable round count",
+            "Trains your analogue time reading"
         )
         ChallengeType.NONE -> "No challenge — alarm dismisses normally." to listOf(
             "Simple swipe to dismiss",
@@ -605,6 +611,11 @@ fun getChallengeSettingsSummary(type: ChallengeType, uiState: AlarmUiState): Str
             "$d · ${r}R"
         }
         ChallengeType.CHARGER -> null
+        ChallengeType.CLOCK_READING -> {
+            val d = uiState.clockReadingDifficulty.name.lowercase().replaceFirstChar { it.uppercase() }
+            val r = uiState.clockReadingCount
+            "$d · ${r}R"
+        }
         else -> null
     }
 }
@@ -632,6 +643,7 @@ fun getChallengeTileSubtitle(type: ChallengeType): String {
         ChallengeType.REVERSE_TYPING -> "Reverse text"
         ChallengeType.AUDIO_MEMORY -> "Replay sounds"
         ChallengeType.CHARGER -> "Plug in"
+        ChallengeType.CLOCK_READING -> "Read time"
     }
 }
 

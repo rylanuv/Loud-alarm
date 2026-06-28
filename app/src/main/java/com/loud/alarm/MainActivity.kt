@@ -32,6 +32,7 @@ import com.loud.alarm.ui.settings.AlarmReliabilityScreen
 import com.loud.alarm.ui.settings.SettingsScreen
 import com.loud.alarm.ui.subscription.SubscriptionScreen
 import com.loud.alarm.ui.theme.LoudAlarmTheme
+import com.loud.alarm.billing.BillingManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -40,6 +41,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var analyticsLogger: AnalyticsLogger
+
+    @Inject
+    lateinit var billingManager: BillingManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,15 +55,22 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Color.Black
                 ) {
-                    AlarmNavigation(analyticsLogger)
+                    val openSubscription = intent.getBooleanExtra("OPEN_SUBSCRIPTION", false)
+                    AlarmNavigation(analyticsLogger, openSubscription)
                 }
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Refresh purchases and subscription status whenever the app enters the foreground
+        billingManager.restorePurchases()
+    }
 }
 
 @Composable
-fun AlarmNavigation(analyticsLogger: AnalyticsLogger) {
+fun AlarmNavigation(analyticsLogger: AnalyticsLogger, openSubscription: Boolean = false) {
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val onboardingCompleted by onboardingViewModel.onboardingCompleted.collectAsState(initial = null)
     val navController = rememberNavController()
@@ -84,6 +95,12 @@ fun AlarmNavigation(analyticsLogger: AnalyticsLogger) {
         val route = backStackEntry?.destination?.route?.substringBefore("?")
         if (!route.isNullOrBlank() && route != bootstrapRoute) {
             analyticsLogger.logScreen(route)
+        }
+    }
+
+    LaunchedEffect(openSubscription) {
+        if (openSubscription) {
+            navController.navigate("subscription")
         }
     }
 

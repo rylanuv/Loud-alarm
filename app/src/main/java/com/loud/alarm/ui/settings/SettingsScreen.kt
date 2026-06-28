@@ -2,6 +2,7 @@ package com.loud.alarm.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,8 +55,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,6 +69,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loud.alarm.data.VibrationPattern
 import com.loud.alarm.ui.components.PremiumSubscriptionCard
@@ -175,6 +183,7 @@ fun SettingsScreen(
                             valueRange = 5f..60f,
                             onValueChange = { viewModel.setAutoSilenceDuration((kotlin.math.round(it / 5f) * 5f).toInt()) }
                         )
+
                         
                     }
                 }
@@ -253,6 +262,19 @@ fun SettingsScreen(
             item {
                 SettingsCard {
                     Column {
+                        SettingClickableItem(
+                            icon = Icons.Default.Star,
+                            title = "Rate our app",
+                            subtitle = "Love the app? Leave a review!",
+                            onClick = {
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}")))
+                                } catch (e: Exception) {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")))
+                                }
+                            }
+                        )
+                        SettingDivider()
                         SettingClickableItem(
                             icon = Icons.Default.Email,
                             title = "Send Feedback",
@@ -484,6 +506,7 @@ fun SettingsScreen(
             }
         )
     }
+
 }
 }
 
@@ -501,34 +524,26 @@ fun SectionHeader(title: String) {
 @Composable
 fun SettingsCard(content: @Composable () -> Unit) {
     val cardShape = RoundedCornerShape(22.dp)
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = cardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(cardShape)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xC61A181C),
-                            Color(0xB5100F12)
-                        )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xC61A181C),
+                        Color(0xB5100F12)
                     )
-                )
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.14f),
-                    shape = cardShape
-                )
-        ) {
-            content()
-        }
+                ),
+                shape = cardShape
+            )
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.14f),
+                shape = cardShape
+            )
+            .clip(cardShape)
+    ) {
+        content()
     }
 }
 
@@ -632,8 +647,6 @@ fun SettingClickableItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White.copy(alpha = 0.03f))
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -707,7 +720,7 @@ private fun SettingLeadingIcon(icon: ImageVector) {
             imageVector = icon,
             contentDescription = null,
             tint = Color.White,
-            modifier = Modifier.size(20.dp)
+        modifier = Modifier.size(20.dp)
         )
     }
 }

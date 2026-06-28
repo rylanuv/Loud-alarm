@@ -99,6 +99,13 @@ class AnalyticsLogger @Inject constructor(
         )
     }
 
+    fun logChallengeSelected(challengeType: String) {
+        logEvent(
+            Event.CHALLENGE_SELECTED,
+            mapOf(Param.CHALLENGE_TYPE to challengeType)
+        )
+    }
+
     fun logPurchaseFlowStarted(productId: String) {
         logEvent(Event.PURCHASE_FLOW_STARTED, mapOf(Param.PRODUCT_ID to productId))
     }
@@ -159,6 +166,7 @@ class AnalyticsLogger @Inject constructor(
         const val ALARM_TRIGGERED = "alarm_triggered"
         const val ALARM_DISMISSED = "alarm_dismissed"
         const val ALARM_SNOOZED = "alarm_snoozed"
+        const val CHALLENGE_SELECTED = "challenge_selected"
         const val PURCHASE_FLOW_STARTED = "purchase_flow_started"
         const val PURCHASE_COMPLETED = "purchase_completed"
         const val PURCHASE_CANCELLED = "purchase_cancelled"
@@ -169,6 +177,7 @@ class AnalyticsLogger @Inject constructor(
     private object Param {
         const val CHALLENGE_COUNT = "challenge_count"
         const val CHALLENGE_TYPES = "challenge_types"
+        const val CHALLENGE_TYPE = "challenge_type"
         const val IS_REPEATING = "is_repeating"
         const val WAKE_UP_CHECK_MINUTES = "wake_up_check_minutes"
         const val SNOOZE_MINUTES = "snooze_minutes"

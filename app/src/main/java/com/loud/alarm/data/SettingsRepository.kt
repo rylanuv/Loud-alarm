@@ -38,6 +38,8 @@ class SettingsRepository @Inject constructor(
         val NEXT_REVIEW_DISMISS_MILESTONE = intPreferencesKey("next_review_dismiss_milestone")
         val IS_DEV_MODE_ENABLED = booleanPreferencesKey("is_dev_mode_enabled")
         val SKELETON_OVERLAY_ENABLED = booleanPreferencesKey("skeleton_overlay_enabled")
+        val SHOW_LABELS_ENABLED = booleanPreferencesKey("show_labels_enabled")
+        val PREVENT_POWER_OFF_ENABLED = booleanPreferencesKey("prevent_power_off_enabled")
     }
 
     val vibrationEnabled: Flow<Boolean> = context.dataStore.data
@@ -99,6 +101,12 @@ class SettingsRepository @Inject constructor(
         .map { preferences: Preferences ->
             preferences[PreferencesKeys.SKELETON_OVERLAY_ENABLED] ?: false
         }
+
+    val showLabelsEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.SHOW_LABELS_ENABLED] ?: false
+        }
+
 
     suspend fun setVibrationEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences: MutablePreferences ->
@@ -171,6 +179,13 @@ class SettingsRepository @Inject constructor(
             preferences[PreferencesKeys.SKELETON_OVERLAY_ENABLED] = enabled
         }
     }
+
+    suspend fun setShowLabelsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.SHOW_LABELS_ENABLED] = enabled
+        }
+    }
+
 
     // --- In-App Review tracking ---
 

@@ -90,6 +90,32 @@ class InAppReviewManager @Inject constructor(
         }
     }
 
+    /**
+     * Forces the Google Play In-App Review flow for debugging.
+     */
+    suspend fun forceRequestReview(activity: Activity) {
+        try {
+            val reviewManager = ReviewManagerFactory.create(activity)
+
+            val reviewInfo = suspendCoroutine { cont ->
+                reviewManager.requestReviewFlow()
+                    .addOnSuccessListener { info -> cont.resume(info) }
+                    .addOnFailureListener { e -> cont.resumeWithException(e) }
+            }
+
+            Log.d(TAG, "Review flow info obtained. Launching review dialog (forced)...")
+
+            suspendCoroutine { cont ->
+                reviewManager.launchReviewFlow(activity, reviewInfo)
+                    .addOnCompleteListener { cont.resume(Unit) }
+            }
+
+            Log.d(TAG, "Forced review flow completed.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch forced review flow", e)
+        }
+    }
+
     private fun calculateNextDismissMilestone(currentDismissCount: Int): Int {
         return if (currentDismissCount < FIRST_DISMISS_THRESHOLD) {
             FIRST_DISMISS_THRESHOLD

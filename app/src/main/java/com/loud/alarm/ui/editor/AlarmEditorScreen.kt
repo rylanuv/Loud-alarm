@@ -574,7 +574,8 @@ fun AlarmEditorScreen(
                         ChallengeType.QR_CODE to Triple(Icons.Default.QrCodeScanner, "QR Code", IconPurple),
                         ChallengeType.REWRITE to Triple(Icons.Default.Edit, "Rewrite", IconYellow),
                         ChallengeType.TAP_CHALLENGE to Triple(Icons.Default.TouchApp, "Tap", IconGreen),
-                        ChallengeType.CHARGER to Triple(Icons.Default.Power, "Charger", IconLightGreen),
+                        ChallengeType.CHARGER to Triple(Icons.Default.Power, "Charger", IconGreen),
+                        ChallengeType.CLOCK_READING to Triple(Icons.Default.AccessTime, "Clock Reading", IconAmber),
                         ChallengeType.STEP to Triple(Icons.AutoMirrored.Filled.DirectionsWalk, "Steps", IconOrange),
                         ChallengeType.MAZE to Triple(Icons.Default.Gamepad, "Maze", IconGreen),
                         ChallengeType.MEMORY to Triple(Icons.Default.Psychology, "Memory", IconPink),
@@ -852,7 +853,7 @@ fun AlarmEditorScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "Free users can long-press premium challenges to preview them before upgrading.",
+                                "Free users can long-press premium challenges to preview them.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.9f)
                             )
@@ -985,10 +986,10 @@ fun AlarmEditorScreen(
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                         Spacer(modifier = Modifier.height(16.dp))
-                                        CountChipRow(label = "Squat Target", options = listOf(5, 10, 15, 20, 30), selected = uiState.squatCount, onSelect = { viewModel.updateSquatCount(it) }, suffix = "squats")
+                                        CountChipRow(label = "Squat Target", options = listOf(5, 10, 15, 20, 30, 50, 100), selected = uiState.squatCount, onSelect = { viewModel.updateSquatCount(it) }, suffix = "squats")
                                     }
                                     ChallengeType.PUSH_UP -> {
-                                        CountChipRow(label = "Push Up Target", options = listOf(5, 10, 15, 20, 30), selected = uiState.pushUpCount, onSelect = { viewModel.updatePushUpCount(it) }, suffix = "push-ups")
+                                        CountChipRow(label = "Push Up Target", options = listOf(5, 10, 15, 20, 30, 50, 100), selected = uiState.pushUpCount, onSelect = { viewModel.updatePushUpCount(it) }, suffix = "push-ups")
                                     }
                                     ChallengeType.REVERSE_TYPING -> {
                                         CountChipRow(label = "Typing Rounds", options = listOf(1, 2, 3, 5, 7), selected = uiState.reverseTypingCount, onSelect = { viewModel.updateReverseTypingCount(it) }, suffix = "rounds")
@@ -1290,6 +1291,27 @@ fun AlarmEditorScreen(
                                             color = Color.White.copy(alpha = 0.7f)
                                         )
                                     }
+                                    ChallengeType.CLOCK_READING -> {
+                                        DifficultySelector(
+                                            label = "Clock Reading Difficulty",
+                                            selected = uiState.clockReadingDifficulty,
+                                            onSelect = { viewModel.updateClockReadingDifficulty(it) },
+                                            descriptions = mapOf(
+                                                MathDifficulty.EASY to "5-minute intervals (3:15, 7:30)",
+                                                MathDifficulty.MEDIUM to "Any minute value (4:23, 9:47)",
+                                                MathDifficulty.HARD to "Tricky hand positions (overlapping)",
+                                                MathDifficulty.EXTREME to "Any minute, all positions"
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        CountChipRow(
+                                            label = "Number of Rounds",
+                                            options = listOf(1, 2, 3, 5),
+                                            selected = uiState.clockReadingCount,
+                                            onSelect = { viewModel.updateClockReadingCount(it) },
+                                            suffix = "rounds"
+                                        )
+                                    }
                                     else -> {}
                                 }
                             }
@@ -1328,6 +1350,8 @@ fun AlarmEditorScreen(
                                 putExtra("spellBeeCount", uiState.spellBeeCount)
                                 putExtra("audioMemoryDifficulty", uiState.audioMemoryDifficulty.name)
                                 putExtra("audioMemoryChallengeCount", uiState.audioMemoryChallengeCount)
+                                putExtra("clockReadingDifficulty", uiState.clockReadingDifficulty.name)
+                                putExtra("clockReadingCount", uiState.clockReadingCount)
                             }
                             context.startActivity(previewIntent)
                             showPreviewForChallenge = null

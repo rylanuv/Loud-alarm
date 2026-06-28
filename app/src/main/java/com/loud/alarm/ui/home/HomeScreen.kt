@@ -377,29 +377,35 @@ fun SwipeableAlarmItem(
         enableDismissFromStartToEnd = false,
         backgroundContent = {
             val isSwiping = dismissState.targetValue != SwipeToDismissBoxValue.Settled || dismissState.currentValue != SwipeToDismissBoxValue.Settled
+            val isOverThreshold = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
             
-            if (isSwiping) {
-                val color = MaterialTheme.colorScheme.error
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(color)
-                        .padding(horizontal = 20.dp),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = Color.White
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Transparent)
+            val color by androidx.compose.animation.animateColorAsState(
+                targetValue = if (isSwiping) MaterialTheme.colorScheme.error else Color.Transparent,
+                label = "backgroundColor"
+            )
+            
+            val scale by animateFloatAsState(
+                targetValue = if (isOverThreshold) 1.2f else if (isSwiping) 0.8f else 0.0f,
+                label = "iconScale"
+            )
+            val alpha by animateFloatAsState(
+                targetValue = if (isSwiping) 1f else 0f,
+                label = "iconAlpha"
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(color)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color.White.copy(alpha = alpha),
+                    modifier = Modifier.scale(scale)
                 )
             }
         },
@@ -508,6 +514,8 @@ fun AlarmItemContent(
                                 ChallengeType.PUSH_UP -> "Push Up"
                                 ChallengeType.REVERSE_TYPING -> "Reverse Typing"
                                 ChallengeType.AUDIO_MEMORY -> "Audio Memory"
+                                ChallengeType.CLOCK_READING -> "Clock Reading"
+                                ChallengeType.CHARGER -> "Charger"
                                 else -> type.name
                             }
                         }

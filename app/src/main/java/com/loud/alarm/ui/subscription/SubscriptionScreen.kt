@@ -44,6 +44,7 @@ import com.loud.alarm.billing.BillingManager
 import com.loud.alarm.billing.BillingViewModel
 import com.loud.alarm.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -60,6 +61,14 @@ fun SubscriptionScreen(
     val lifetimePrice by billingViewModel.lifetimePrice.collectAsState()
     val monthlyPrice by billingViewModel.monthlyPrice.collectAsState()
     val yearlyPrice by billingViewModel.yearlyPrice.collectAsState()
+    val purchaseError by billingViewModel.purchaseError.collectAsState()
+
+    // Collect structured offer info (includes intro pricing)
+    val monthlyOfferInfo by billingViewModel.monthlyOfferInfo.collectAsState()
+    val yearlyOfferInfo by billingViewModel.yearlyOfferInfo.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     val activeColor = PrimaryAccent // Premium gold
     val goldGradient = Brush.horizontalGradient(
@@ -126,6 +135,24 @@ fun SubscriptionScreen(
         }
     }
 
+    // Retry loading subscription details when screen opens
+    LaunchedEffect(Unit) {
+        billingViewModel.retryLoadingDetails()
+    }
+
+    // Show error Snackbar when purchaseError changes
+    LaunchedEffect(purchaseError) {
+        purchaseError?.let { error ->
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    message = error,
+                    duration = SnackbarDuration.Short
+                )
+                billingViewModel.clearPurchaseError()
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.newsubsc),
@@ -136,6 +163,16 @@ fun SubscriptionScreen(
 
         Scaffold(
             containerColor = Color.Transparent,
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState) { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        containerColor = Color(0xFF2C2C2C),
+                        contentColor = Color.White,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
             topBar = {
                 TopAppBar(
                     title = { },
@@ -186,7 +223,7 @@ fun SubscriptionScreen(
                     enter = fadeIn(tween(600)) + slideInVertically(tween(600)) { -30 }
                 ) {
                     Text(
-                        text = "Never Sleep In\nAgain.",
+                        text = "Never Sleep In\nAgain",
                         fontSize = 40.sp,
                         fontWeight = FontWeight.Black,
                         lineHeight = 44.sp,
@@ -386,6 +423,7 @@ fun SubscriptionScreen(
                         ) {
                             val isSelected = selectedPlan == 1
                             val borderColor = if (isSelected) activeColor else inactiveBorderColor
+                            val yearlyInfo = yearlyOfferInfo
 
                             Row(
                                 modifier = Modifier
@@ -401,21 +439,67 @@ fun SubscriptionScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Annual", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                    Text(
-                                        text = "Best Value",
-                                        style = if (isSelected) {
-                                            androidx.compose.ui.text.TextStyle(brush = shinyBrightGoldGradient)
-                                        } else {
-                                            androidx.compose.ui.text.TextStyle(color = grayText)
-                                        },
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                    if (yearlyInfo?.hasIntroOffer == true) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFF4CAF50).copy(alpha = 0.2f))
+                                                .border(1.dp, Color(0xFF4CAF50).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                yearlyInfo.discountPercentage?.let { "$it% OFF" } ?: "50% OFF",
+                                                color = Color(0xFF4CAF50),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                letterSpacing = 0.5.sp,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            text = "Best Value",
+                                            style = if (isSelected) {
+                                                androidx.compose.ui.text.TextStyle(brush = shinyBrightGoldGradient)
+                                            } else {
+                                                androidx.compose.ui.text.TextStyle(color = grayText)
+                                            },
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text(yearlyPrice ?: "$12.99", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                    Text("per year", color = grayText, fontSize = 12.sp, maxLines = 1)
+                                    if (yearlyInfo?.hasIntroOffer == true) {
+                                        Text(
+                                            text = yearlyInfo.introPrice ?: "",
+                                            color = Color.White,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = yearlyInfo.regularPrice ?: "",
+                                                color = grayText,
+                                                fontSize = 12.sp,
+                                                textDecoration = TextDecoration.LineThrough,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = " ${yearlyInfo.regularPeriodDesc ?: "per year"}",
+                                                color = grayText,
+                                                fontSize = 12.sp,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    } else {
+                                        Text(yearlyPrice ?: "${'$'}12.99", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                        Text("per year", color = grayText, fontSize = 12.sp, maxLines = 1)
+                                    }
                                 }
                             }
                         }
@@ -424,6 +508,7 @@ fun SubscriptionScreen(
                         Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                             val isSelected = selectedPlan == 2
                             val borderColor = if (isSelected) activeColor else inactiveBorderColor
+                            val monthlyInfo = monthlyOfferInfo
 
                             Row(
                                 modifier = Modifier
@@ -439,12 +524,60 @@ fun SubscriptionScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Monthly", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                    Text("Try It Out", color = grayText, fontSize = 14.sp, maxLines = 1)
+                                    if (monthlyInfo?.hasIntroOffer == true) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFF4CAF50).copy(alpha = 0.2f))
+                                                .border(1.dp, Color(0xFF4CAF50).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            val discountText = monthlyInfo.discountPercentage?.let { "$it% OFF" } ?: "50% OFF"
+                                            val periodText = monthlyInfo.introPeriodDesc?.removePrefix("for ")?.uppercase() ?: "3 MONTHS"
+                                            Text(
+                                                "$discountText · $periodText",
+                                                color = Color(0xFF4CAF50),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                letterSpacing = 0.5.sp,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    } else {
+                                        Text("Try It Out", color = grayText, fontSize = 14.sp, maxLines = 1)
+                                    }
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text(monthlyPrice ?: "$1.49", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                    Text("per month", color = grayText, fontSize = 12.sp, maxLines = 1)
+                                    if (monthlyInfo?.hasIntroOffer == true) {
+                                        Text(
+                                            text = monthlyInfo.introPrice ?: "",
+                                            color = Color.White,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = monthlyInfo.regularPrice ?: "",
+                                                color = grayText,
+                                                fontSize = 12.sp,
+                                                textDecoration = TextDecoration.LineThrough,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = " ${monthlyInfo.regularPeriodDesc ?: "per month"}",
+                                                color = grayText,
+                                                fontSize = 12.sp,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    } else {
+                                        Text(monthlyPrice ?: "${'$'}1.49", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                        Text("per month", color = grayText, fontSize = 12.sp, maxLines = 1)
+                                    }
                                 }
                             }
                         }
@@ -468,7 +601,7 @@ fun SubscriptionScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Lifetime", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                    Text("Pay once, yours forever", color = grayText, fontSize = 14.sp, maxLines = 1)
+                                    Text("Yours forever", color = grayText, fontSize = 14.sp, maxLines = 1)
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(horizontalAlignment = Alignment.End) {
@@ -491,7 +624,7 @@ fun SubscriptionScreen(
                             initialValue = 1f,
                             targetValue = 1.03f,
                             animationSpec = infiniteRepeatable(
-                                animation = tween(1000, easing = FastOutSlowInEasing),
+                                animation = tween(1800, easing = FastOutSlowInEasing),
                                 repeatMode = RepeatMode.Reverse
                             ),
                             label = "scale"

@@ -15,11 +15,15 @@ import com.loud.alarm.data.AlarmRepository
 import com.loud.alarm.data.Alarm
 import kotlinx.coroutines.flow.map
 
+import android.app.Activity
+import com.loud.alarm.review.InAppReviewManager
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val billingManager: BillingManager,
-    private val alarmRepository: AlarmRepository
+    private val alarmRepository: AlarmRepository,
+    private val inAppReviewManager: InAppReviewManager
 ) : ViewModel() {
 
     val vibrationEnabled: StateFlow<Boolean> = settingsRepository.vibrationEnabled
@@ -56,6 +60,10 @@ class SettingsViewModel @Inject constructor(
 
     val skeletonOverlayEnabled: StateFlow<Boolean> = settingsRepository.skeletonOverlayEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val showLabelsEnabled: StateFlow<Boolean> = settingsRepository.showLabelsEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
 
     fun setVibrationEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -122,6 +130,19 @@ class SettingsViewModel @Inject constructor(
     fun setSkeletonOverlayEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSkeletonOverlayEnabled(enabled)
+        }
+    }
+
+    fun setShowLabelsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setShowLabelsEnabled(enabled)
+        }
+    }
+
+
+    fun testFeedbackPopup(activity: Activity) {
+        viewModelScope.launch {
+            inAppReviewManager.forceRequestReview(activity)
         }
     }
 }

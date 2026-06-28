@@ -209,6 +209,12 @@ object DatabaseModule {
                 db.execSQL("ALTER TABLE alarms ADD COLUMN audioMemoryChallengeCount INTEGER NOT NULL DEFAULT 3")
             }
         }
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN clockReadingDifficulty TEXT NOT NULL DEFAULT 'EASY'")
+                db.execSQL("ALTER TABLE alarms ADD COLUMN clockReadingCount INTEGER NOT NULL DEFAULT 1")
+            }
+        }
         return Room.databaseBuilder(
             context,
             AlarmDatabase::class.java,
@@ -236,7 +242,8 @@ object DatabaseModule {
             MIGRATION_19_20,
             MIGRATION_20_21,
             MIGRATION_21_22,
-            MIGRATION_22_23
+            MIGRATION_22_23,
+            MIGRATION_23_24
         )
         .build()
     }

@@ -23,7 +23,8 @@ class AlarmActiveViewModel @Inject constructor(
     private val repository: AlarmRepository,
     private val scheduler: com.loud.alarm.service.AlarmScheduler,
     private val settingsRepository: SettingsRepository,
-    private val analyticsLogger: AnalyticsLogger
+    private val analyticsLogger: AnalyticsLogger,
+    private val billingManager: com.loud.alarm.billing.BillingManager
 ) : ViewModel() {
     companion object {
         private const val TAG = "AlarmActiveViewModel"
@@ -35,6 +36,10 @@ class AlarmActiveViewModel @Inject constructor(
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
     val snoozeEnabled: StateFlow<Boolean> = settingsRepository.snoozeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        
+    val isSubscribed: StateFlow<Boolean> = billingManager.isSubscribed
+    val alarmDismissCount: StateFlow<Int> = settingsRepository.alarmDismissCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     fun loadAlarm(id: Int) {
         viewModelScope.launch {

@@ -25,18 +25,22 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -57,9 +61,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -68,7 +74,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.core.content.ContextCompat
+import androidx.compose.runtime.collectAsState
+import dagger.hilt.android.EntryPointAccessors
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -109,11 +118,7 @@ private const val SLIDING_WINDOW_HITS_REQUIRED = 3
  * Keys and values are all lowercase.
  */
 private val targetAliasMap: Map<String, Set<String>> = mapOf(
-    "toothbrush" to setOf(
-        "toothbrush", "tooth brushing", "brush", "dental",
-        "oral hygiene", "bathroom accessory", "personal care",
-        "plastic", "bathroom", "hygiene"
-    ),
+
     "sink" to setOf(
         "sink", "plumbing fixture", "bathroom sink", "kitchen sink",
         "washbasin", "tap", "faucet", "plumbing", "bathroom",
@@ -124,11 +129,7 @@ private val targetAliasMap: Map<String, Set<String>> = mapOf(
         "tableware", "serveware", "teacup", "espresso",
         "ceramic", "porcelain", "pottery", "dishware", "beverage"
     ),
-    "bowl" to setOf(
-        "bowl", "mixing bowl", "tableware", "ceramic",
-        "serveware", "dishware", "dish", "plate", "porcelain",
-        "pottery", "kitchenware", "soup bowl", "food"
-    ),
+
     "shoe" to setOf(
         "shoe", "sneakers", "footwear", "boot", "running shoe",
         "athletic shoe", "walking shoe", "outdoor shoe", "tennis shoe",
@@ -165,24 +166,14 @@ private val targetAliasMap: Map<String, Set<String>> = mapOf(
         "cherry", "melon", "tropical fruit", "jackfruit",
         "vegetable", "plant", "diet"
     ),
-    "bottle" to setOf(
-        "bottle", "water bottle", "plastic bottle", "glass bottle",
-        "wine bottle", "drinkware", "beverage can",
-        "flask", "jar", "pop bottle", "pill bottle",
-        "beer bottle", "soda bottle", "container",
-        "liquid", "glass", "plastic"
-    ),
+
     "watch" to setOf(
         "watch", "wristwatch", "analog watch", "clock",
         "timepiece", "digital watch", "smartwatch",
         "chronometer", "stopwatch", "analog clock",
         "digital clock", "strap", "wrist"
     ),
-    "key" to setOf(
-        "key", "keys", "key chain", "keychain", "lock",
-        "door key", "car key", "key ring", "padlock",
-        "metal", "brass", "hardware", "security"
-    ),
+
     "backpack" to setOf(
         "backpack", "bag", "luggage and bags", "rucksack",
         "handbag", "shoulder bag", "knapsack", "satchel",
@@ -196,14 +187,7 @@ private val targetAliasMap: Map<String, Set<String>> = mapOf(
         "rocking chair", "barber chair",
         "room", "interior design", "wood", "desk", "comfort"
     ),
-    "door" to setOf(
-        "door", "door handle", "home door", "handle",
-        "entrance", "doorway", "gate", "doorknob", "hinge",
-        "sliding door", "doormat", "fixture",
-        "wood", "property", "house", "building", "wall",
-        "room", "architecture", "home", "interior design",
-        "floor", "ceiling", "hall", "real estate"
-    ),
+
     "television" to setOf(
         "television", "tv", "flat panel display",
         "led-backlit lcd display", "computer monitor",
@@ -220,24 +204,7 @@ private val targetAliasMap: Map<String, Set<String>> = mapOf(
         "electronic device", "technology", "gadget",
         "desk", "tableware", "multimedia"
     ),
-    "mouse" to setOf(
-        "mouse", "computer mouse", "input device",
-        "peripheral", "cursor",
-        "pointing device", "wireless mouse", "optical mouse",
-        "trackpad", "computer hardware", "electronic device", "gadget"
-    ),
-    "keyboard" to setOf(
-        "keyboard", "computer keyboard", "electronic keyboard",
-        "musical keyboard", "input device",
-        "space bar", "numeric keypad", "peripheral",
-        "qwerty", "computer hardware", "typewriter keyboard",
-        "musical instrument", "technology", "electronic device"
-    ),
-    "scissors" to setOf(
-        "scissors", "scissor", "pair of scissors", "shears",
-        "cutting tool", "stationery", "office supplies", "blade",
-        "snips", "clippers", "trimmer", "metal", "tool", "hardware"
-    ),
+
     "phone" to setOf(
         "phone", "smartphone", "mobile phone", "cell phone",
         "cellular phone", "telephone", "mobile device",
@@ -250,21 +217,7 @@ private val targetAliasMap: Map<String, Set<String>> = mapOf(
         "umbrella", "canopy", "shade", "parasol", "rain",
         "shelter", "cover", "awning", "sunshade", "textile"
     ),
-    "calculator" to setOf(
-        "calculator", "office equipment", "office supplies",
-        "numeric keypad", "electronic device",
-        "electronic instrument", "office instrument", "gadget"
-    ),
-    "wallet" to setOf(
-        "wallet", "purse", "billfold", "leather",
-        "cardholder", "pouch", "coin purse",
-        "accessory", "fashion", "textile"
-    ),
-    "refrigerator" to setOf(
-        "refrigerator", "fridge", "major appliance",
-        "kitchen appliance", "home appliance", "freezer",
-        "appliance", "cooler", "kitchen", "metal", "white"
-    ),
+
     "bed" to setOf(
         "bed", "bedroom", "bed frame", "mattress", "bed sheet",
         "pillow", "duvet", "bedding", "blanket",
@@ -279,23 +232,52 @@ private val targetAliasMap: Map<String, Set<String>> = mapOf(
         "mountain bike", "road bike", "bmx",
         "vehicle", "tire", "bicycle-built-for-two"
     ),
-    "toilet" to setOf(
-        "toilet", "plumbing fixture", "toilet seat", "bathroom",
-        "restroom", "lavatory", "commode", "wc",
-        "plumbing", "toilet tissue", "ceramic", "porcelain"
-    ),
+
     "clock" to setOf(
         "clock", "wall clock", "alarm clock", "timer", "watch",
         "timepiece", "chronometer", "analog clock", "digital clock",
         "time", "dial"
     ),
-    "headphones" to setOf(
-        "headphones", "earphones", "headset", "audio equipment",
-        "earbuds", "audio", "music", "sound",
-        "speaker", "helmet", "personal protective equipment",
-        "gadget", "electronic device",
-        "wire", "cable", "peripheral", "technology", "accessory",
-        "musical instrument", "mobile phone"
+    "bottle" to setOf(
+        "bottle", "water bottle", "plastic bottle", "glass bottle",
+        "drink", "beverage", "container", "flask", "jug",
+        "liquid", "drinkware", "cylinder"
+    ),
+    "keys" to setOf(
+        "key", "keys", "key chain", "keychain", "lock",
+        "door key", "car key", "metal", "brass"
+    ),
+    "towel" to setOf(
+        "towel", "bath towel", "hand towel", "washcloth",
+        "textile", "fabric", "linen", "cloth", "terry cloth"
+    ),
+    "mirror" to setOf(
+        "mirror", "looking glass", "reflection", "glass",
+        "vanity", "bathroom mirror", "wall mirror"
+    ),
+    "door" to setOf(
+        "door", "doorway", "door handle", "entrance",
+        "gate", "door frame", "wood", "room"
+    ),
+    "window" to setOf(
+        "window", "glass", "window frame", "curtain",
+        "windowpane", "blinds", "shutter"
+    ),
+    "fan" to setOf(
+        "fan", "ceiling fan", "electric fan", "ventilator",
+        "blower", "propeller", "blade"
+    ),
+    "remote" to setOf(
+        "remote control", "remote", "controller", "tv remote",
+        "electronic device", "gadget", "button"
+    ),
+    "toothbrush" to setOf(
+        "toothbrush", "tooth brush", "brush", "dental",
+        "oral hygiene", "bathroom", "bristle"
+    ),
+    "soap" to setOf(
+        "soap", "bar soap", "hand soap", "soap dispenser",
+        "cleanser", "detergent", "bathroom", "hygiene"
     )
 )
 
@@ -337,14 +319,7 @@ private val NOISE_LABELS: Set<String> = setOf(
 )
 
 private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
-    "toothbrush" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "toothbrush", "tooth brushing", "brush",
-            "oral hygiene", "bathroom accessory", "personal care"
-        ),
-        secondaryLabels = setOf("plastic", "bathroom", "hygiene", "tool"),
-        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
-    ),
+
     "sink" to TargetLabelSpec(
         primaryLabels = setOf(
             "sink", "bathroom sink", "kitchen sink", "washbasin",
@@ -360,12 +335,11 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         ),
         secondaryLabels = setOf("serveware", "ceramic", "porcelain", "dishware", "beverage", "liquid")
     ),
-    "bowl" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "bowl", "mixing bowl", "tableware", "dishware"
-        ),
-        secondaryLabels = setOf("kitchenware", "serveware", "ceramic", "porcelain", "food")
+    "cup" to TargetLabelSpec(
+        primaryLabels = setOf("cup", "coffee", "cappuccino", "juice"),
+        secondaryLabels = setOf("tableware", "saucer", "food")
     ),
+
     "shoe" to TargetLabelSpec(
         primaryLabels = setOf(
             "shoe", "sneaker", "sneakers", "footwear", "boot", "running shoe",
@@ -400,6 +374,10 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         ),
         secondaryLabels = setOf("technology", "electronic device", "gadget", "screen", "display device", "keyboard")
     ),
+    "computer" to TargetLabelSpec(
+        primaryLabels = setOf("computer"),
+        secondaryLabels = setOf("desk", "screen", "web page", "technology")
+    ),
     "fruit" to TargetLabelSpec(
         primaryLabels = setOf(
             "fruit", "apple", "banana", "orange", "pineapple", "mango",
@@ -409,14 +387,7 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         ),
         secondaryLabels = setOf("food", "vegetable", "plant", "diet", "nutrition")
     ),
-    "bottle" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "bottle", "water bottle", "plastic bottle", "glass bottle",
-            "wine bottle", "beer bottle", "soda bottle", "flask",
-            "pop bottle", "pill bottle"
-        ),
-        secondaryLabels = setOf("drinkware", "beverage can", "jar", "container", "liquid", "glass", "plastic")
-    ),
+
     "watch" to TargetLabelSpec(
         primaryLabels = setOf(
             "watch", "wristwatch", "analog watch", "digital watch", "smartwatch",
@@ -425,14 +396,7 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         secondaryLabels = setOf("clock", "strap", "wrist", "accessory"),
         minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
     ),
-    "key" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "key", "keys", "key chain", "keychain", "key ring",
-            "door key", "car key", "padlock", "lock"
-        ),
-        secondaryLabels = setOf("metal", "brass", "hardware", "tool", "security"),
-        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
-    ),
+
     "backpack" to TargetLabelSpec(
         primaryLabels = setOf(
             "backpack", "rucksack", "knapsack", "school bag", "daypack",
@@ -440,6 +404,14 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
             "bag", "handbag", "shoulder bag"
         ),
         secondaryLabels = setOf("strap", "zipper", "textile", "nylon", "fabric")
+    ),
+    "bag" to TargetLabelSpec(
+        primaryLabels = setOf("bag", "handbag"),
+        secondaryLabels = setOf("pocket", "strap", "leather", "textile")
+    ),
+    "handbag" to TargetLabelSpec(
+        primaryLabels = setOf("handbag", "bag"),
+        secondaryLabels = setOf("pocket", "strap", "leather", "textile")
     ),
     "chair" to TargetLabelSpec(
         primaryLabels = setOf(
@@ -449,16 +421,7 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         secondaryLabels = setOf("room", "interior design", "wood", "table", "desk", "comfort"),
         minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
     ),
-    "door" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "door", "home door", "door handle", "doorway", "doorknob", "entrance door",
-            "entrance", "gate", "sliding door", "doormat", "fixture",
-            "wood", "property", "house", "building", "wall", "room"
-        ),
-        secondaryLabels = setOf("handle", "hinge", "architecture", "home", "interior design",
-            "floor", "ceiling", "hall", "corridor", "real estate"),
-        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
-    ),
+
     "television" to TargetLabelSpec(
         primaryLabels = setOf(
             "television", "tv", "television set", "smart tv", "lcd tv", "flat screen",
@@ -479,31 +442,7 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
             "computer", "multimedia", "desk", "tableware"),
         minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
     ),
-    "mouse" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "mouse", "computer mouse", "wireless mouse", "optical mouse",
-            "input device", "pointing device", "trackpad"
-        ),
-        secondaryLabels = setOf("peripheral", "computer hardware", "electronic device", "gadget", "technology"),
-        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
-    ),
-    "keyboard" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "keyboard", "computer keyboard", "qwerty keyboard",
-            "numeric keypad", "keypad", "electronic keyboard",
-            "space bar", "input device", "typewriter keyboard",
-            "musical instrument", "musical keyboard"
-        ),
-        secondaryLabels = setOf("peripheral", "computer hardware", "technology", "electronic device")
-    ),
-    "scissors" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "scissors", "scissor", "pair of scissors", "shears", "cutting tool",
-            "blade", "snips", "clippers", "trimmer"
-        ),
-        secondaryLabels = setOf("stationery", "office supplies", "tool", "metal", "hardware"),
-        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
-    ),
+
     "phone" to TargetLabelSpec(
         primaryLabels = setOf(
             "phone", "smartphone", "mobile phone", "cell phone",
@@ -519,28 +458,14 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         ),
         secondaryLabels = setOf("rain", "shade", "shelter", "textile")
     ),
-    "calculator" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "calculator", "office equipment"
-        ),
-        secondaryLabels = setOf("numeric keypad", "office supplies", "electronic device", "gadget"),
-        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    "glasses" to TargetLabelSpec(
+        primaryLabels = setOf("glasses"),
+        secondaryLabels = setOf("sunglasses", "goggles")
     ),
-    "wallet" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "wallet", "billfold", "cardholder", "coin purse", "purse"
-        ),
-        secondaryLabels = setOf("leather", "accessory", "fashion", "textile"),
-        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    "sunglasses" to TargetLabelSpec(
+        primaryLabels = setOf("sunglasses", "glasses", "goggles")
     ),
-    "refrigerator" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "refrigerator", "fridge", "freezer",
-            "major appliance", "kitchen appliance", "home appliance"
-        ),
-        secondaryLabels = setOf("kitchen", "appliance", "metal", "white", "cooler"),
-        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
-    ),
+
     "bed" to TargetLabelSpec(
         primaryLabels = setOf(
             "bed", "bed frame", "mattress", "bedding",
@@ -548,6 +473,15 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
             "comforter", "quilt", "headboard"
         ),
         secondaryLabels = setOf("bedroom", "cushion", "linen", "furniture", "room", "textile", "comfort"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "pillow" to TargetLabelSpec(
+        primaryLabels = setOf("pillow", "cushion"),
+        secondaryLabels = setOf("bedroom", "textile", "bedroom", "sleep")
+    ),
+    "couch" to TargetLabelSpec(
+        primaryLabels = setOf("couch", "loveseat"),
+        secondaryLabels = setOf("chair", "armrest", "cushion", "room", "furniture"),
         minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
     ),
     "bicycle" to TargetLabelSpec(
@@ -558,14 +492,7 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         ),
         secondaryLabels = setOf("pedal", "handlebar", "spoke", "wheel", "vehicle", "tire")
     ),
-    "toilet" to TargetLabelSpec(
-        primaryLabels = setOf(
-            "toilet", "toilet seat", "commode", "wc",
-            "plumbing fixture", "toilet tissue"
-        ),
-        secondaryLabels = setOf("bathroom", "restroom", "lavatory", "plumbing", "ceramic", "porcelain"),
-        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
-    ),
+
     "clock" to TargetLabelSpec(
         primaryLabels = setOf(
             "clock", "wall clock", "alarm clock", "timer",
@@ -573,16 +500,135 @@ private val targetLabelSpecs: Map<String, TargetLabelSpec> = mapOf(
         ),
         secondaryLabels = setOf("watch", "time", "dial", "number")
     ),
-    "headphones" to TargetLabelSpec(
+    "flowerpot" to TargetLabelSpec(
+        primaryLabels = setOf("flowerpot", "plant", "flower"),
+        secondaryLabels = setOf("flora", "garden", "soil")
+    ),
+    "cutlery" to TargetLabelSpec(
+        primaryLabels = setOf("cutlery"),
+        secondaryLabels = setOf("tableware", "cuisine", "food")
+    ),
+    "tableware" to TargetLabelSpec(
+        primaryLabels = setOf("tableware", "cutlery", "saucer"),
+        secondaryLabels = setOf("food", "cuisine")
+    ),
+    "cookware" to TargetLabelSpec(
+        primaryLabels = setOf("cookware and bakeware"),
+        secondaryLabels = setOf("kitchen", "food", "cuisine")
+    ),
+    "paper" to TargetLabelSpec(
+        primaryLabels = setOf("paper", "newspaper", "receipt"),
+        secondaryLabels = setOf("document", "web page")
+    ),
+    "newspaper" to TargetLabelSpec(
+        primaryLabels = setOf("newspaper", "paper", "news")
+    ),
+    "receipt" to TargetLabelSpec(
+        primaryLabels = setOf("receipt", "paper"),
+        secondaryLabels = setOf("money")
+    ),
+    "money" to TargetLabelSpec(
+        primaryLabels = setOf("money"),
+        secondaryLabels = setOf("receipt")
+    ),
+    "ring" to TargetLabelSpec(
+        primaryLabels = setOf("ring"),
+        secondaryLabels = setOf("jewellery", "metal")
+    ),
+    "bracelet" to TargetLabelSpec(
+        primaryLabels = setOf("bracelet", "bangle"),
+        secondaryLabels = setOf("jewellery", "metal")
+    ),
+    "necklace" to TargetLabelSpec(
+        primaryLabels = setOf("necklace"),
+        secondaryLabels = setOf("jewellery", "metal")
+    ),
+    "helmet" to TargetLabelSpec(
+        primaryLabels = setOf("helmet"),
+        secondaryLabels = setOf("sports")
+    ),
+    "shelf" to TargetLabelSpec(
+        primaryLabels = setOf("shelf"),
+        secondaryLabels = setOf("cabinetry", "drawer", "room")
+    ),
+    "drawer" to TargetLabelSpec(
+        primaryLabels = setOf("drawer"),
+        secondaryLabels = setOf("cabinetry", "shelf", "room")
+    ),
+    "cabinetry" to TargetLabelSpec(
+        primaryLabels = setOf("cabinetry", "drawer", "shelf"),
+        secondaryLabels = setOf("kitchen", "room")
+    ),
+    "lampshade" to TargetLabelSpec(
+        primaryLabels = setOf("lampshade"),
+        secondaryLabels = setOf("room")
+    ),
+    "bottle" to TargetLabelSpec(
         primaryLabels = setOf(
-            "headphones", "earphones", "headset", "earbuds",
-            "audio equipment", "audio", "speaker",
-            "personal protective equipment", "helmet",
-            "gadget", "electronic device"
+            "bottle", "water bottle", "plastic bottle", "glass bottle",
+            "flask", "jug", "container"
         ),
-        secondaryLabels = setOf("music", "sound", "wire", "cable",
-            "peripheral", "technology", "accessory",
-            "musical instrument", "mobile phone"),
+        secondaryLabels = setOf("drink", "beverage", "liquid", "drinkware", "cylinder")
+    ),
+    "keys" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "key", "keys", "key chain", "keychain"
+        ),
+        secondaryLabels = setOf("lock", "metal", "brass", "door key", "car key"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "towel" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "towel", "bath towel", "hand towel", "washcloth", "terry cloth"
+        ),
+        secondaryLabels = setOf("textile", "fabric", "linen", "cloth", "bathroom")
+    ),
+    "mirror" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "mirror", "looking glass", "vanity", "bathroom mirror", "wall mirror"
+        ),
+        secondaryLabels = setOf("glass", "reflection", "bathroom"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "door" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "door", "doorway", "gate", "entrance", "door frame"
+        ),
+        secondaryLabels = setOf("door handle", "wood", "room", "house"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "window" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "window", "windowpane", "window frame"
+        ),
+        secondaryLabels = setOf("glass", "curtain", "blinds", "shutter", "daylight"),
+        minimumConfidence = LARGE_OBJECT_MATCH_CONFIDENCE
+    ),
+    "fan" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "fan", "ceiling fan", "electric fan", "ventilator"
+        ),
+        secondaryLabels = setOf("blower", "propeller", "blade", "mechanical fan")
+    ),
+    "remote" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "remote control", "remote", "controller", "tv remote"
+        ),
+        secondaryLabels = setOf("electronic device", "gadget", "button", "technology"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "toothbrush" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "toothbrush", "tooth brush", "brush"
+        ),
+        secondaryLabels = setOf("dental", "oral hygiene", "bathroom", "bristle"),
+        minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
+    ),
+    "soap" to TargetLabelSpec(
+        primaryLabels = setOf(
+            "soap", "bar soap", "hand soap", "soap dispenser"
+        ),
+        secondaryLabels = setOf("cleanser", "detergent", "bathroom", "hygiene"),
         minimumConfidence = SMALL_OBJECT_MATCH_CONFIDENCE
     )
 )
@@ -746,13 +792,33 @@ fun ScanChallengeScreen(
     var recentFrameResults by remember { mutableStateOf(ArrayDeque<Boolean>()) }
     var scanPhase by remember { mutableStateOf(ScanPhase.SCANNING) }
 
+    // Tap-to-scan: scanning is only active while the user holds the scan button
+    var isScanActive by remember { mutableStateOf(false) }
+
     val cameraPermissionState = rememberPermissionState(
         android.Manifest.permission.CAMERA
     )
 
+    val context = LocalContext.current
+    val settingsRepository = remember(context) {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            com.loud.alarm.di.RepositoryEntryPoint::class.java
+        ).settingsRepository()
+    }
+    val showLabelsEnabled by settingsRepository.showLabelsEnabled.collectAsState(initial = false)
+
     LaunchedEffect(Unit) {
         if (!cameraPermissionState.status.isGranted) {
             cameraPermissionState.launchPermissionRequest()
+        }
+    }
+
+    // Reset consecutive/sliding counters when scan button is released
+    LaunchedEffect(isScanActive) {
+        if (!isScanActive && scanPhase == ScanPhase.SCANNING) {
+            consecutiveMatchCount = 0
+            recentFrameResults = ArrayDeque()
         }
     }
 
@@ -771,14 +837,38 @@ fun ScanChallengeScreen(
         }
     }
 
+    // Pulsing animation for the scan button
+    val infiniteButtonTransition = rememberInfiniteTransition(label = "scanButton")
+    val scanButtonPulse by infiniteButtonTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scanButtonPulse"
+    )
+    val scanButtonGlow by infiniteButtonTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scanButtonGlow"
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (cameraPermissionState.status.isGranted) {
             // Camera preview with image labeling
             ImageLabelingCameraPreview(
                 targetLabel = targetLabel,
+                isScanActive = isScanActive,
                 onLabelsDetected = { labels, matched, confidence ->
                     // Stop analyzing once we've entered the confirmation phase
                     if (scanPhase != ScanPhase.SCANNING) return@ImageLabelingCameraPreview
+                    // Only process when scan button is held
+                    if (!isScanActive) return@ImageLabelingCameraPreview
 
                     detectedLabels = labels
                     if (matched && !hasMatched) {
@@ -815,17 +905,19 @@ fun ScanChallengeScreen(
             // ── Overlay layer depends on phase ──
             when (scanPhase) {
                 ScanPhase.SCANNING -> {
-                    // Normal scanning overlay
-                    ScanningOverlay()
+                    // Show scanning overlay only when actively scanning
+                    if (isScanActive) {
+                        ScanningOverlay()
+                    }
 
                     // Bottom info panel
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(24.dp),
+                            .padding(bottom = 140.dp, start = 24.dp, end = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        if (detectedLabels.isNotEmpty()) {
+                        if (showLabelsEnabled && isScanActive && detectedLabels.isNotEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
@@ -851,14 +943,14 @@ fun ScanChallengeScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = displaySubtitle,
+                            text = if (isScanActive) displaySubtitle else "Tap the scan button below to start scanning",
                             style = MaterialTheme.typography.bodyLarge,
                             color = Color.White.copy(alpha = 0.8f),
                             textAlign = TextAlign.Center
                         )
 
                         if (onFallbackToMath != null) {
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             TextButton(
                                 onClick = onFallbackToMath,
                                 colors = ButtonDefaults.textButtonColors(
@@ -887,6 +979,104 @@ fun ScanChallengeScreen(
                 }
             }
 
+            // ── Floating Tap-to-Scan Button ──
+            if (scanPhase == ScanPhase.SCANNING) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Scan button with press-and-hold
+                    Box(contentAlignment = Alignment.Center) {
+                        // Outer glow ring (pulsing when idle, solid when active)
+                        Box(
+                            modifier = Modifier
+                                .size(100.dp)
+                                .scale(if (isScanActive) 1.12f else scanButtonPulse)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            if (isScanActive)
+                                                Color(0xFF4FC3F7).copy(alpha = 0.5f)
+                                            else
+                                                Color(0xFF4FC3F7).copy(alpha = scanButtonGlow * 0.35f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Main button circle
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .shadow(
+                                    elevation = if (isScanActive) 16.dp else 8.dp,
+                                    shape = CircleShape,
+                                    ambientColor = Color(0xFF4FC3F7),
+                                    spotColor = Color(0xFF4FC3F7)
+                                )
+                                .clip(CircleShape)
+                                .background(
+                                    if (isScanActive)
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                Color(0xFF4FC3F7),
+                                                Color(0xFF0288D1)
+                                            )
+                                        )
+                                    else
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                Color(0xFF29B6F6).copy(alpha = 0.9f),
+                                                Color(0xFF0277BD).copy(alpha = 0.9f)
+                                            )
+                                        )
+                                )
+                                .border(
+                                    width = 2.dp,
+                                    color = if (isScanActive)
+                                        Color.White.copy(alpha = 0.8f)
+                                    else
+                                        Color.White.copy(alpha = 0.3f),
+                                    shape = CircleShape
+                                )
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            isScanActive = true
+                                            tryAwaitRelease()
+                                            isScanActive = false
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CenterFocusStrong,
+                                contentDescription = "Tap to scan",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (isScanActive) "Scanning..." else "Hold to Scan",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isScanActive)
+                            Color(0xFF4FC3F7)
+                        else
+                            Color.White.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         } else {
             // Permission not granted UI
             Column(
@@ -1202,16 +1392,20 @@ fun ScanningOverlay() {
  * Camera preview that runs ML Kit Image Labeling (bundled model) directly
  * on each frame. The bundled model has a rich vocabulary of 400+ labels,
  * providing reliable coverage for all the everyday objects we support.
+ *
+ * @param isScanActive When false, frame analysis is skipped to save resources.
  */
 @Composable
 fun ImageLabelingCameraPreview(
     targetLabel: String,
+    isScanActive: Boolean = true,
     onLabelsDetected: (labels: List<String>, matched: Boolean, confidence: Float) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraProviderFuture = remember(context) { ProcessCameraProvider.getInstance(context) }
     val currentOnLabelsDetected by rememberUpdatedState(onLabelsDetected)
+    val currentIsScanActive by rememberUpdatedState(isScanActive)
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     val previewView = remember(context) {
         PreviewView(context).apply {
@@ -1237,7 +1431,10 @@ fun ImageLabelingCameraPreview(
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
 
-        val analyzer = DirectImageLabelAnalyzer(targetLabel) { labels, matched, confidence ->
+        val analyzer = DirectImageLabelAnalyzer(
+            targetLabel = targetLabel,
+            isScanActiveProvider = { currentIsScanActive }
+        ) { labels, matched, confidence ->
             currentOnLabelsDetected(labels, matched, confidence)
         }
 
@@ -1283,9 +1480,13 @@ fun ImageLabelingCameraPreview(
 /**
  * Analyzer that runs ML Kit Image Labeling (bundled model) directly on every frame.
  * The bundled model provides specific, accurate labels for 400+ object categories.
+ *
+ * @param isScanActiveProvider Returns true when scanning should be active. Frames are
+ *        skipped (closed immediately) when this returns false.
  */
 class DirectImageLabelAnalyzer(
     private val targetLabel: String,
+    private val isScanActiveProvider: () -> Boolean = { true },
     private val onResult: (labels: List<String>, matched: Boolean, confidence: Float) -> Unit
 ) : ImageAnalysis.Analyzer {
 
@@ -1311,6 +1512,12 @@ class DirectImageLabelAnalyzer(
     @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
         if (isClosed) {
+            imageProxy.close()
+            return
+        }
+
+        // Skip processing when scan is not active (tap-to-scan not held)
+        if (!isScanActiveProvider()) {
             imageProxy.close()
             return
         }
@@ -1351,8 +1558,6 @@ class DirectImageLabelAnalyzer(
                     targetLabel
                 )
 
-                val matched = match != null
-
                 if (match != null) {
                     Log.d(TAG, "MATCH FOUND: target='$targetLabel', " +
                             "detected='${match.detectedText}', " +
@@ -1361,7 +1566,7 @@ class DirectImageLabelAnalyzer(
                             "reason=${match.reason}, all labels=${labelTexts.take(8)}")
                 }
 
-                onResult(plainLabels, matched, match?.confidence ?: 0f)
+                onResult(plainLabels, match != null, match?.confidence ?: 0f)
             }
             .addOnFailureListener { e ->
                 if (isClosed) return@addOnFailureListener

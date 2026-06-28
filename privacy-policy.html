@@ -125,10 +125,10 @@
     <div class="container">
         <h1>Privacy Policy</h1>
         <p class="subtitle">Loud Alarm – Solve2Wake</p>
-        <p class="effective-date"><strong>Effective Date:</strong> March 8, 2026</p>
+        <p class="effective-date"><strong>Effective Date:</strong> June 19, 2026</p>
 
         <div class="highlight-box">
-            <p><strong>Summary:</strong> Loud Alarm – Solve2Wake does <strong>not collect or share</strong> any personally identifiable information. Your alarm and configuration data is stored locally on your device. We use anonymized analytics to improve the app experience.
+            <p><strong>Summary:</strong> Loud Alarm – Solve2Wake does <strong>not collect or share</strong> any personally identifiable information. Your alarm and configuration data is stored locally on your device. We use anonymized analytics (including a resettable advertising identifier) to improve the app experience.
             </p>
         </div>
 
@@ -153,6 +153,7 @@
             <li>We do <strong>not</strong> collect location data.</li>
             <li>We <strong>do</strong> collect anonymized usage analytics (such as screens viewed, challenges completed, and alarm settings used) to help us improve the App.</li>
             <li>We use <strong>Google Analytics for Firebase</strong> to process this usage data securely.</li>
+            <li>We collect the <strong>Google Advertising ID</strong> (a resettable, anonymous identifier) solely for analytics purposes. This identifier does <strong>not</strong> contain personally identifiable information.</li>
         </ul>
 
         <h2>3. Data Stored Locally on Your Device</h2>
@@ -168,6 +169,7 @@
                 code is captured and saved locally on your device. This image is used solely to help you identify and
                 locate the physical barcode you need to scan to dismiss the alarm. These images are <strong>never
                     transmitted</strong> to any server or third party.</li>
+            <li><strong>Sensor data:</strong> If you use the Step Counter or Shake challenges, the App temporarily reads motion sensor data (accelerometer and step counter) during the challenge. This data is processed in real-time on your device and is <strong>never stored or transmitted</strong>.</li>
             <li><strong>App settings:</strong> Vibration preference, snooze settings, alarm volume, fade-in duration,
                 and dark mode preference.</li>
         </ul>
@@ -207,38 +209,46 @@
             <li><strong>Schedule Exact Alarm / Use Exact Alarm:</strong> Required to trigger alarms at the precise time
                 you set.</li>
             <li><strong>Post Notifications:</strong> Required to display alarm notifications when an alarm rings.</li>
-            <li><strong>Foreground Service (Media Playback):</strong> Required to play the alarm sound reliably, even
+            <li><strong>Foreground Service (Media Playback &amp; System Exempted):</strong> Required to play the alarm sound reliably and maintain alarm reliability, even
                 when the App is in the background.</li>
             <li><strong>Wake Lock:</strong> Required to wake the device screen when an alarm fires.</li>
             <li><strong>Receive Boot Completed:</strong> Required to re-schedule your alarms after the device restarts.
             </li>
             <li><strong>Vibrate:</strong> Required to vibrate the device when an alarm rings (if enabled in settings).
             </li>
-            <li><strong>Camera:</strong> Optional. Used only for the Barcode Challenge feature (see Section 4).</li>
+            <li><strong>Camera:</strong> Optional. Used only for the Barcode Challenge and Scan challenges (see Section 4).</li>
             <li><strong>System Alert Window:</strong> Required to display the alarm screen over other apps and on the
                 lock screen.</li>
+            <li><strong>Disable Keyguard:</strong> Required to dismiss the device lock screen so the alarm screen can be shown immediately.</li>
             <li><strong>Use Full Screen Intent:</strong> Required to show the full-screen alarm activity when the device
                 screen is off.</li>
             <li><strong>Request Ignore Battery Optimizations:</strong> Ensures alarms fire reliably and are not delayed
                 by battery optimization.</li>
+            <li><strong>Activity Recognition:</strong> Optional. Required for the Step Counter challenge to detect and count your steps.</li>
+            <li><strong>High Sampling Rate Sensors:</strong> Optional. Required for the Shake challenge to accurately detect shaking motion.</li>
+            <li><strong>Advertising ID:</strong> Used to collect an anonymous, resettable device identifier for analytics purposes (see Section 2).</li>
             <li><strong>Billing:</strong> Required to process optional in-app purchases or donations securely via Google
                 Play.</li>
             <li><strong>Internet &amp; Network State:</strong> Required to transmit anonymized analytics data to help improve the App.</li>
+            <li><strong>Accessibility Service:</strong> Optional. If enabled, the App uses an Accessibility Service solely to prevent the device from being powered off while an alarm is actively ringing. This service does <strong>not</strong> read, collect, or transmit any personal data, screen content, or keystrokes. It is active <strong>only</strong> during an alarm event.</li>
         </ul>
 
         <h2>6. Third-Party Services</h2>
         <p>
-            The App uses <strong>Google ML Kit Barcode Scanning</strong> for on-device barcode recognition. This library
+            The App uses <strong>Google ML Kit Barcode Scanning</strong> for on-device barcode recognition (Barcode/QR Code challenge). This library
             processes data <strong>entirely on your device</strong> and does not send any data to Google or any external
-            server. 
+            server.
         </p>
         <p>
-            The App also uses <strong>Google Analytics for Firebase</strong> to collect anonymized usage data to help us understand how users interact with the App. You can learn more about how Google uses data at <a href="https://policies.google.com/technologies/partner-sites" target="_blank">Google's Privacy &amp; Terms site</a>. No advertising networks are integrated into the App.
+            The App also uses <strong>Google ML Kit Image Labeling</strong> (Play Services variant) for the Scan Sink and Scan Object challenges. This library uses on-device machine learning to identify objects through the camera. All image processing happens <strong>entirely on your device</strong>; no images or recognition data are transmitted to any server or third party.
+        </p>
+        <p>
+            The App uses <strong>Google Analytics for Firebase</strong> to collect anonymized usage data (including the Google Advertising ID) to help us understand how users interact with the App. The Advertising ID is a resettable, anonymous identifier and is <strong>not</strong> used for personalized advertising. You can learn more about how Google uses data at <a href="https://policies.google.com/technologies/partner-sites" target="_blank">Google's Privacy &amp; Terms site</a>. No advertising networks are integrated into the App.
         </p>
 
         <h2>7. Data Sharing</h2>
         <p>
-            We do <strong>not share</strong> any personally identifiable information with third parties. Anonymized usage data is processed by Google Analytics for Firebase as described above. We do not sell any of your data.
+            We do <strong>not share</strong> any personally identifiable information with third parties. Anonymized usage data (including the Advertising ID) is processed by Google Analytics for Firebase as described above. We do not sell any of your data. The Advertising ID is not shared with any advertising networks.
         </p>
 
         <h2>8. Children's Privacy</h2>

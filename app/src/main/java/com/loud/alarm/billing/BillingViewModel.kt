@@ -22,6 +22,13 @@ class BillingViewModel @Inject constructor(
     val monthlyPrice: StateFlow<String?> = billingManager.monthlyPrice
     val yearlyPrice: StateFlow<String?> = billingManager.yearlyPrice
 
+    // Structured offer info with intro pricing details
+    val monthlyOfferInfo: StateFlow<BillingManager.SubscriptionOfferInfo?> = billingManager.monthlyOfferInfo
+    val yearlyOfferInfo: StateFlow<BillingManager.SubscriptionOfferInfo?> = billingManager.yearlyOfferInfo
+
+    // Error state for UI feedback
+    val purchaseError: StateFlow<String?> = billingManager.purchaseError
+
     fun purchaseQrCode(activity: Activity) {
         billingManager.launchPurchaseFlow(activity)
     }
@@ -40,5 +47,13 @@ class BillingViewModel @Inject constructor(
 
     fun setSubscribed(subscribed: Boolean) {
         billingManager.setSubscribed(subscribed)
+    }
+
+    fun clearPurchaseError() {
+        billingManager.clearPurchaseError()
+    }
+
+    fun retryLoadingDetails() {
+        billingManager.retryQuerySubscriptionDetails()
     }
 }

@@ -76,6 +76,12 @@ class AlarmService : Service() {
         @Volatile
         private var activeInstance: AlarmService? = null
 
+        /** True while the alarm is actively ringing */
+        @Volatile
+        @JvmStatic
+        var isRinging: Boolean = false
+            private set
+
         /** Saved MUSIC stream volume before TTS boost */
         private var savedMusicVolume: Int = -1
 
@@ -215,6 +221,7 @@ class AlarmService : Service() {
             currentVolumeBoostEnabled = isVolumeBoostEnabled
             stopRequested = false
             activeInstance = this
+            isRinging = true
             restartScheduled = false
             Log.d(TAG, "AlarmService started for PREVIEW")
             
@@ -237,6 +244,7 @@ class AlarmService : Service() {
                 ) {
                     kotlinx.coroutines.runBlocking { settingsRepository.vibrationPattern.first() }
                 }
+
 
                 Handler(Looper.getMainLooper()).post {
                     startAlarm(
@@ -266,11 +274,31 @@ class AlarmService : Service() {
         currentVolumeBoostEnabled = ringingContext.isVolumeBoostEnabled
         stopRequested = false
         activeInstance = this
+        isRinging = true
         restartScheduled = false
         Log.d(TAG, "AlarmService started for alarm: ${ringingContext.alarmId}")
 
         acquireWakeLock()
-        startForeground(NOTIFICATION_ID, createNotification(ringingContext.alarmId))
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                // Android 14+: Alarm apps with USE_EXACT_ALARM should use SYSTEM_EXEMPTED (1024)
+                startForeground(
+                    NOTIFICATION_ID, 
+                    createNotification(ringingContext.alarmId),
+                    1024 or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID, 
+                    createNotification(ringingContext.alarmId),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification(ringingContext.alarmId))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to startForeground, app might be in strict background state", e)
+        }
 
         Thread {
             val isVibrationEnabled = readSettingOrDefault("vibrationEnabled", true) {
@@ -734,6 +762,7 @@ class AlarmService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         activeInstance = null
+        isRinging = false
         Log.d(TAG, "AlarmService onDestroy: cleaning up resources")
         timeoutHandler.removeCallbacksAndMessages(null)
         loudnessEnhancer?.release()

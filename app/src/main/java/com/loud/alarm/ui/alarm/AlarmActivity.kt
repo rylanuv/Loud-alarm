@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -83,6 +84,7 @@ import com.loud.alarm.ui.challenge.PushUpChallengeScreen
 import com.loud.alarm.ui.challenge.ReverseTypingChallengeScreen
 import com.loud.alarm.ui.challenge.AudioMemoryChallengeScreen
 import com.loud.alarm.ui.challenge.ChargerChallengeScreen
+import com.loud.alarm.ui.challenge.ClockReadingChallengeScreen
 import com.loud.alarm.ui.challenge.RandomObjectPickerScreen
 import com.loud.alarm.ui.challenge.TapChallengeScreen
 import com.loud.alarm.ui.home.formatTime
@@ -150,7 +152,9 @@ class AlarmActivity : ComponentActivity() {
                 spellBeeDifficulty = MathDifficulty.valueOf(intent.getStringExtra("spellBeeDifficulty") ?: "EASY"),
                 spellBeeCount = intent.getIntExtra("spellBeeCount", 3),
                 audioMemoryDifficulty = MathDifficulty.valueOf(intent.getStringExtra("audioMemoryDifficulty") ?: "EASY"),
-                audioMemoryChallengeCount = intent.getIntExtra("audioMemoryChallengeCount", 1)
+                audioMemoryChallengeCount = intent.getIntExtra("audioMemoryChallengeCount", 1),
+                clockReadingDifficulty = MathDifficulty.valueOf(intent.getStringExtra("clockReadingDifficulty") ?: "EASY"),
+                clockReadingCount = intent.getIntExtra("clockReadingCount", 1)
             )
             setContent {
                 LoudAlarmTheme(darkTheme = true) {
@@ -443,10 +447,15 @@ fun ActiveAlarmScreen(
         var reverseTypingSolved by rememberSaveable { mutableStateOf(false) }
         var audioMemorySolved by rememberSaveable { mutableStateOf(false) }
         var chargerSolved by rememberSaveable { mutableStateOf(false) }
+        var clockReadingSolved by rememberSaveable { mutableStateOf(false) }
+        val context = LocalContext.current
+        val isSubscribed by viewModel.isSubscribed.collectAsState()
+        val alarmDismissCount by viewModel.alarmDismissCount.collectAsState()
         
         var isRingingScreenDismissed by rememberSaveable { mutableStateOf(false) }
         var pendingSnoozeMinutes by rememberSaveable { mutableStateOf<Int?>(null) }
         var showCongrats by rememberSaveable { mutableStateOf(false) }
+        var showUpgradePrompt by rememberSaveable { mutableStateOf(false) }
 
         // Build the ordered list of challenges the user must complete
         val activeChallenges = remember(alarm.challengeTypes) {
@@ -473,6 +482,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.REVERSE_TYPING -> reverseTypingSolved
                 ChallengeType.AUDIO_MEMORY -> audioMemorySolved
                 ChallengeType.CHARGER -> chargerSolved
+                ChallengeType.CLOCK_READING -> clockReadingSolved
                 ChallengeType.NONE -> true
             }
         }
@@ -497,6 +507,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.REVERSE_TYPING -> !reverseTypingSolved
                 ChallengeType.AUDIO_MEMORY -> !audioMemorySolved
                 ChallengeType.CHARGER -> !chargerSolved
+                ChallengeType.CLOCK_READING -> !clockReadingSolved
                 ChallengeType.NONE -> false
             }
         }
@@ -522,6 +533,24 @@ fun ActiveAlarmScreen(
         if (showCongrats) {
             CongratsScreen(
                 onAnimationFinished = {
+                    if (alarmDismissCount == 4 && !isSubscribed && !isPreview) {
+                        showUpgradePrompt = true
+                    } else {
+                        onDismissActivity()
+                    }
+                }
+            )
+        } else if (showUpgradePrompt) {
+            UpgradePromptScreen(
+                onUpgrade = {
+                    val intent = Intent(context, com.loud.alarm.MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra("OPEN_SUBSCRIPTION", true)
+                    }
+                    context.startActivity(intent)
+                    onDismissActivity()
+                },
+                onDismiss = {
                     onDismissActivity()
                 }
             )
@@ -763,6 +792,13 @@ fun ActiveAlarmScreen(
                         ChallengeType.CHARGER -> {
                             ChargerChallengeScreen(
                                 onSuccess = { chargerSolved = true }
+                            )
+                        }
+                        ChallengeType.CLOCK_READING -> {
+                            ClockReadingChallengeScreen(
+                                difficulty = alarm.clockReadingDifficulty,
+                                questionCount = alarm.clockReadingCount,
+                                onSuccess = { clockReadingSolved = true }
                             )
                         }
                         else -> {

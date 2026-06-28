@@ -42,6 +42,20 @@ class BillingManager @Inject constructor(
         val ALL_PREMIUM_PRODUCT_IDS = setOf(PRODUCT_ID_LIFETIME, PRODUCT_ID_MONTHLY, PRODUCT_ID_YEARLY)
     }
 
+    /**
+     * Holds structured info about a subscription offer, including introductory
+     * pricing phases (free trial, discounted period) and the regular price.
+     */
+    data class SubscriptionOfferInfo(
+        val hasIntroOffer: Boolean = false,
+        val introPrice: String? = null,       // e.g. "$0.75" or "Free"
+        val introPeriodDesc: String? = null,   // e.g. "for 3 months", "for 7 days"
+        val regularPrice: String? = null,      // e.g. "$1.49"
+        val regularPeriodDesc: String? = null,  // e.g. "per month", "per year"
+        val discountPercentage: Int? = null,
+        val offerToken: String? = null
+    )
+
     private var billingClient: BillingClient? = null
     private var productDetails: ProductDetails? = null
 
@@ -49,6 +63,10 @@ class BillingManager @Inject constructor(
     private var lifetimeProductDetails: ProductDetails? = null
     private var monthlyProductDetails: ProductDetails? = null
     private var yearlyProductDetails: ProductDetails? = null
+
+    // Stored offer tokens for the best offer per plan (intro offer preferred)
+    private var monthlyOfferToken: String? = null
+    private var yearlyOfferToken: String? = null
 
     private val _isQrCodePurchased = MutableStateFlow(false)
     val isQrCodePurchased: StateFlow<Boolean> = _isQrCodePurchased.asStateFlow()
@@ -62,7 +80,7 @@ class BillingManager @Inject constructor(
     private val _isSubscribed = MutableStateFlow(false)
     val isSubscribed: StateFlow<Boolean> = _isSubscribed.asStateFlow()
 
-    // Price flows for each plan
+    // Price flows for each plan (always the regular/base price)
     private val _lifetimePrice = MutableStateFlow<String?>(null)
     val lifetimePrice: StateFlow<String?> = _lifetimePrice.asStateFlow()
 
@@ -72,9 +90,24 @@ class BillingManager @Inject constructor(
     private val _yearlyPrice = MutableStateFlow<String?>(null)
     val yearlyPrice: StateFlow<String?> = _yearlyPrice.asStateFlow()
 
+    // Structured offer info with introductory pricing
+    private val _monthlyOfferInfo = MutableStateFlow<SubscriptionOfferInfo?>(null)
+    val monthlyOfferInfo: StateFlow<SubscriptionOfferInfo?> = _monthlyOfferInfo.asStateFlow()
+
+    private val _yearlyOfferInfo = MutableStateFlow<SubscriptionOfferInfo?>(null)
+    val yearlyOfferInfo: StateFlow<SubscriptionOfferInfo?> = _yearlyOfferInfo.asStateFlow()
+
     // Track which plan is active
     private val _activePlan = MutableStateFlow<String?>(null)
     val activePlan: StateFlow<String?> = _activePlan.asStateFlow()
+
+    // Error state for UI feedback
+    private val _purchaseError = MutableStateFlow<String?>(null)
+    val purchaseError: StateFlow<String?> = _purchaseError.asStateFlow()
+
+    fun clearPurchaseError() {
+        _purchaseError.value = null
+    }
 
     fun initialize() {
         billingClient = BillingClient.newBuilder(context)
@@ -102,8 +135,7 @@ class BillingManager @Inject constructor(
                     retryCount = 0
                     queryProductDetails()
                     querySubscriptionDetails()
-                    queryExistingPurchases()
-                    queryExistingSubscriptions()
+                    queryPurchases()
                 } else {
                     Log.e(TAG, "Billing setup failed: ${billingResult.debugMessage}")
                 }
@@ -190,21 +222,37 @@ class BillingManager @Inject constructor(
         billingClient?.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 val productDetailsList = queryProductDetailsResult.productDetailsList
+                Log.d(TAG, "Subscription query returned ${productDetailsList.size} products")
                 for (details in productDetailsList) {
+                    val offers = details.subscriptionOfferDetails
+                    Log.d(TAG, "Found subscription product: ${details.productId}, offerCount: ${offers?.size}")
+                    offers?.forEach { offer ->
+                        Log.d(TAG, "  Offer: id=${offer.offerId}, basePlan=${offer.basePlanId}, " +
+                                "phases=${offer.pricingPhases.pricingPhaseList.size}, token=${offer.offerToken.take(20)}...")
+                        offer.pricingPhases.pricingPhaseList.forEachIndexed { i, phase ->
+                            Log.d(TAG, "    Phase $i: ${phase.formattedPrice}, period=${phase.billingPeriod}, " +
+                                    "cycles=${phase.billingCycleCount}, recurrence=${phase.recurrenceMode}")
+                        }
+                    }
+
                     when (details.productId) {
                         PRODUCT_ID_MONTHLY -> {
                             monthlyProductDetails = details
-                            val offerDetails = details.subscriptionOfferDetails?.firstOrNull()
-                            val pricingPhase = offerDetails?.pricingPhases?.pricingPhaseList?.firstOrNull()
-                            _monthlyPrice.value = pricingPhase?.formattedPrice
-                            Log.d(TAG, "Monthly price: ${_monthlyPrice.value}")
+                            val offerInfo = processSubscriptionOffers(details, "month")
+                            _monthlyOfferInfo.value = offerInfo
+                            _monthlyPrice.value = offerInfo.regularPrice
+                            monthlyOfferToken = offerInfo.offerToken
+                            Log.d(TAG, "Monthly: regular=${offerInfo.regularPrice}, intro=${offerInfo.introPrice}, " +
+                                    "hasIntro=${offerInfo.hasIntroOffer}, introPeriod=${offerInfo.introPeriodDesc}")
                         }
                         PRODUCT_ID_YEARLY -> {
                             yearlyProductDetails = details
-                            val offerDetails = details.subscriptionOfferDetails?.firstOrNull()
-                            val pricingPhase = offerDetails?.pricingPhases?.pricingPhaseList?.firstOrNull()
-                            _yearlyPrice.value = pricingPhase?.formattedPrice
-                            Log.d(TAG, "Yearly price: ${_yearlyPrice.value}")
+                            val offerInfo = processSubscriptionOffers(details, "year")
+                            _yearlyOfferInfo.value = offerInfo
+                            _yearlyPrice.value = offerInfo.regularPrice
+                            yearlyOfferToken = offerInfo.offerToken
+                            Log.d(TAG, "Yearly: regular=${offerInfo.regularPrice}, intro=${offerInfo.introPrice}, " +
+                                    "hasIntro=${offerInfo.hasIntroOffer}, introPeriod=${offerInfo.introPeriodDesc}")
                         }
                     }
                 }
@@ -212,83 +260,240 @@ class BillingManager @Inject constructor(
                 if (_monthlyPrice.value == null) _monthlyPrice.value = "$1.49"
                 if (_yearlyPrice.value == null) _yearlyPrice.value = "$12.99"
             } else {
-                Log.e(TAG, "Failed to query subscription details: ${billingResult.debugMessage}")
+                Log.e(TAG, "Failed to query subscription details: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
                 _monthlyPrice.value = "$1.49"
                 _yearlyPrice.value = "$12.99"
             }
         }
     }
 
-    private fun queryExistingPurchases() {
+    /**
+     * Process all offers for a subscription product and return structured info.
+     * Prefers the introductory offer (one with >1 pricing phases) over the base plan offer.
+     * The regular price is always extracted from the LAST pricing phase of the best offer
+     * (which is the recurring phase after any intro/trial phases).
+     */
+    private fun processSubscriptionOffers(
+        details: ProductDetails,
+        defaultPeriodLabel: String
+    ): SubscriptionOfferInfo {
+        val offers = details.subscriptionOfferDetails ?: return SubscriptionOfferInfo(
+            regularPrice = null,
+            regularPeriodDesc = "per $defaultPeriodLabel"
+        )
+
+        // Find the best offer: prefer intro offers (>1 pricing phase)
+        val introOffer = offers.firstOrNull { offer ->
+            offer.pricingPhases.pricingPhaseList.size > 1
+        }
+        // Fallback to base plan offer (1 pricing phase, usually no offerId)
+        val basePlanOffer = offers.firstOrNull { offer ->
+            offer.pricingPhases.pricingPhaseList.size == 1
+        }
+
+        if (introOffer != null) {
+            val phases = introOffer.pricingPhases.pricingPhaseList
+            // First phase = introductory (discounted/free), last phase = regular recurring
+            val introPhase = phases.first()
+            val regularPhase = phases.last()
+
+            val introPriceAmountMicros = introPhase.priceAmountMicros
+            val regularPriceAmountMicros = regularPhase.priceAmountMicros
+            val introFormattedPrice = if (introPriceAmountMicros == 0L) "Free" else introPhase.formattedPrice
+
+            var discountPercentage: Int? = null
+            if (regularPriceAmountMicros > 0) {
+                val discount = ((regularPriceAmountMicros - introPriceAmountMicros).toDouble() / regularPriceAmountMicros * 100).toInt()
+                if (discount in 1..100) {
+                    discountPercentage = discount
+                }
+            }
+
+            // Build intro period description from billing period + cycle count
+            val introPeriodDesc = buildIntroPeriodDescription(
+                introPhase.billingPeriod,
+                introPhase.billingCycleCount
+            )
+
+            val regularPeriodDesc = "per ${parseBillingPeriodLabel(regularPhase.billingPeriod, defaultPeriodLabel)}"
+
+            return SubscriptionOfferInfo(
+                hasIntroOffer = true,
+                introPrice = introFormattedPrice,
+                introPeriodDesc = introPeriodDesc,
+                regularPrice = regularPhase.formattedPrice,
+                regularPeriodDesc = regularPeriodDesc,
+                discountPercentage = discountPercentage,
+                offerToken = introOffer.offerToken
+            )
+        }
+
+        if (basePlanOffer != null) {
+            val regularPhase = basePlanOffer.pricingPhases.pricingPhaseList.first()
+            val regularPeriodDesc = "per ${parseBillingPeriodLabel(regularPhase.billingPeriod, defaultPeriodLabel)}"
+
+            return SubscriptionOfferInfo(
+                hasIntroOffer = false,
+                regularPrice = regularPhase.formattedPrice,
+                regularPeriodDesc = regularPeriodDesc,
+                offerToken = basePlanOffer.offerToken
+            )
+        }
+
+        // Fallback: use whatever first offer is available
+        val fallbackOffer = offers.first()
+        val fallbackPhase = fallbackOffer.pricingPhases.pricingPhaseList.lastOrNull()
+        return SubscriptionOfferInfo(
+            regularPrice = fallbackPhase?.formattedPrice,
+            regularPeriodDesc = "per $defaultPeriodLabel",
+            offerToken = fallbackOffer.offerToken
+        )
+    }
+
+    /**
+     * Builds a human-readable intro period description.
+     * E.g., billingPeriod="P1M", cycleCount=3 -> "for 3 months"
+     *        billingPeriod="P1Y", cycleCount=1 -> "for 1 year"
+     *        billingPeriod="P7D", cycleCount=1 -> "for 7 days"
+     */
+    private fun buildIntroPeriodDescription(billingPeriod: String, cycleCount: Int): String {
+        // ISO 8601 duration: P1M, P3M, P1Y, P1W, P7D, etc.
+        val regex = Regex("P(\\d+)([DWMY])")
+        val match = regex.find(billingPeriod) ?: return "for $cycleCount period(s)"
+
+        val amount = match.groupValues[1].toIntOrNull() ?: 1
+        val unit = match.groupValues[2]
+
+        val totalAmount = amount * cycleCount
+        val unitLabel = when (unit) {
+            "D" -> if (totalAmount == 1) "day" else "days"
+            "W" -> if (totalAmount == 1) "week" else "weeks"
+            "M" -> if (totalAmount == 1) "month" else "months"
+            "Y" -> if (totalAmount == 1) "year" else "years"
+            else -> "period(s)"
+        }
+
+        return "for $totalAmount $unitLabel"
+    }
+
+    /**
+     * Parses ISO 8601 billing period to a human label.
+     * E.g., "P1M" -> "month", "P1Y" -> "year", "P1W" -> "week"
+     */
+    private fun parseBillingPeriodLabel(billingPeriod: String, fallback: String): String {
+        val regex = Regex("P(\\d+)([DWMY])")
+        val match = regex.find(billingPeriod) ?: return fallback
+
+        val amount = match.groupValues[1].toIntOrNull() ?: 1
+        val unit = match.groupValues[2]
+
+        return when (unit) {
+            "D" -> if (amount == 1) "day" else "$amount days"
+            "W" -> if (amount == 1) "week" else "$amount weeks"
+            "M" -> if (amount == 1) "month" else "$amount months"
+            "Y" -> if (amount == 1) "year" else "$amount years"
+            else -> fallback
+        }
+    }
+
+    /**
+     * Re-query subscription details. Useful when the initial query may have
+     * failed due to a timing or network issue.
+     */
+    fun retryQuerySubscriptionDetails() {
+        if (billingClient?.isReady == true) {
+            querySubscriptionDetails()
+        } else {
+            Log.w(TAG, "Billing client not ready, reconnecting...")
+            startConnection()
+        }
+    }
+
+    private fun queryPurchases() {
         billingClient?.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder()
                 .setProductType(BillingClient.ProductType.INAPP)
                 .build()
-        ) { billingResult, purchaseList ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                val qrPurchased = purchaseList.any { purchase ->
-                    purchase.products.contains(PRODUCT_ID_QR_CODE) &&
-                    purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
-                    isValidPurchase(purchase)
-                }
-                _isQrCodePurchased.value = qrPurchased
-                Log.d(TAG, "QR Code purchased: $qrPurchased")
+        ) { billingResultInApp, purchaseListInApp ->
+            billingClient?.queryPurchasesAsync(
+                QueryPurchasesParams.newBuilder()
+                    .setProductType(BillingClient.ProductType.SUBS)
+                    .build()
+            ) { billingResultSubs, purchaseListSubs ->
+                if (billingResultInApp.responseCode == BillingClient.BillingResponseCode.OK &&
+                    billingResultSubs.responseCode == BillingClient.BillingResponseCode.OK
+                ) {
+                    var isPremium = false
+                    var activePlanId: String? = null
 
-                // Check for lifetime purchase
-                val lifetimePurchased = purchaseList.any { purchase ->
-                    purchase.products.contains(PRODUCT_ID_LIFETIME) &&
-                    purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
-                    isValidPurchase(purchase)
-                }
-                if (lifetimePurchased) {
-                    _isSubscribed.value = true
-                    _activePlan.value = PRODUCT_ID_LIFETIME
-                    analyticsLogger.setPremiumPlan(PRODUCT_ID_LIFETIME)
-                    Log.d(TAG, "Lifetime purchased: true")
-                }
-
-                // Acknowledge any unacknowledged purchases
-                purchaseList.forEach { purchase ->
-                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && 
-                        !purchase.isAcknowledged && isValidPurchase(purchase)) {
-                        acknowledgePurchase(purchase)
+                    // 1. Check lifetime purchase
+                    val lifetimePurchased = purchaseListInApp.any { purchase ->
+                        purchase.products.contains(PRODUCT_ID_LIFETIME) &&
+                                purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                                isValidPurchase(purchase)
                     }
-                }
-            }
-        }
-    }
 
-    private fun queryExistingSubscriptions() {
-        billingClient?.queryPurchasesAsync(
-            QueryPurchasesParams.newBuilder()
-                .setProductType(BillingClient.ProductType.SUBS)
-                .build()
-        ) { billingResult, purchaseList ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                for (purchase in purchaseList) {
-                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && isValidPurchase(purchase)) {
-                        when {
-                            purchase.products.contains(PRODUCT_ID_MONTHLY) -> {
-                                _isSubscribed.value = true
-                                _activePlan.value = PRODUCT_ID_MONTHLY
-                                analyticsLogger.setPremiumPlan(PRODUCT_ID_MONTHLY)
-                                Log.d(TAG, "Monthly subscription active")
-                            }
-                            purchase.products.contains(PRODUCT_ID_YEARLY) -> {
-                                _isSubscribed.value = true
-                                _activePlan.value = PRODUCT_ID_YEARLY
-                                analyticsLogger.setPremiumPlan(PRODUCT_ID_YEARLY)
-                                Log.d(TAG, "Yearly subscription active")
+                    if (lifetimePurchased) {
+                        isPremium = true
+                        activePlanId = PRODUCT_ID_LIFETIME
+                        Log.d(TAG, "Lifetime purchased: true")
+                    }
+
+                    // 2. Check subscriptions if lifetime is not active
+                    if (!isPremium) {
+                        for (purchase in purchaseListSubs) {
+                            if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && isValidPurchase(purchase)) {
+                                if (purchase.products.contains(PRODUCT_ID_MONTHLY)) {
+                                    isPremium = true
+                                    activePlanId = PRODUCT_ID_MONTHLY
+                                    Log.d(TAG, "Monthly subscription active")
+                                    break
+                                } else if (purchase.products.contains(PRODUCT_ID_YEARLY)) {
+                                    isPremium = true
+                                    activePlanId = PRODUCT_ID_YEARLY
+                                    Log.d(TAG, "Yearly subscription active")
+                                    break
+                                }
                             }
                         }
-                        if (!purchase.isAcknowledged) {
+                    }
+
+                    // Set the subscription state exactly to whether we found an active plan
+                    _isSubscribed.value = isPremium
+                    _activePlan.value = activePlanId
+
+                    if (isPremium && activePlanId != null) {
+                        analyticsLogger.setPremiumPlan(activePlanId)
+                    } else {
+                        analyticsLogger.setPremiumPlan(null)
+                    }
+
+                    Log.d(TAG, "Premium active: ${_isSubscribed.value}, plan: ${_activePlan.value}")
+
+                    // 3. Check QR code purchase
+                    val qrPurchased = purchaseListInApp.any { purchase ->
+                        purchase.products.contains(PRODUCT_ID_QR_CODE) &&
+                                purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                                isValidPurchase(purchase)
+                    }
+                    _isQrCodePurchased.value = qrPurchased
+                    Log.d(TAG, "QR Code purchased: $qrPurchased")
+
+                    // 4. Acknowledge any unacknowledged purchases
+                    val allPurchases = purchaseListInApp + purchaseListSubs
+                    allPurchases.forEach { purchase ->
+                        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                            !purchase.isAcknowledged && isValidPurchase(purchase)
+                        ) {
                             acknowledgePurchase(purchase)
                         }
                     }
+                } else {
+                    Log.e(
+                        TAG, "Failed to query purchases. " +
+                                "InApp Code: ${billingResultInApp.responseCode}, Subs Code: ${billingResultSubs.responseCode}"
+                    )
                 }
-                Log.d(TAG, "Subscription active: ${_isSubscribed.value}, plan: ${_activePlan.value}")
-            } else {
-                Log.e(TAG, "Failed to query subscriptions: ${billingResult.debugMessage}")
             }
         }
     }
@@ -320,6 +525,16 @@ class BillingManager @Inject constructor(
      * @param planType One of PRODUCT_ID_LIFETIME, PRODUCT_ID_MONTHLY, PRODUCT_ID_YEARLY
      */
     fun launchSubscriptionPurchase(activity: Activity, planType: String) {
+        // Clear any previous error
+        _purchaseError.value = null
+
+        if (billingClient?.isReady != true) {
+            Log.e(TAG, "Billing client not ready")
+            _purchaseError.value = "Google Play is not ready. Please check your internet connection and try again."
+            startConnection()
+            return
+        }
+
         val details = when (planType) {
             PRODUCT_ID_LIFETIME -> lifetimeProductDetails
             PRODUCT_ID_MONTHLY -> monthlyProductDetails
@@ -328,20 +543,34 @@ class BillingManager @Inject constructor(
         }
 
         if (details == null) {
-            Log.e(TAG, "Product details not available for plan: $planType")
+            Log.e(TAG, "Product details not available for plan: $planType. Retrying query...")
+            _purchaseError.value = "Loading plan details. Please wait a moment and try again."
+            // Automatically retry fetching product details
+            querySubscriptionDetails()
+            queryProductDetails()
             return
         }
 
         val productDetailsParamsBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
 
-        // For subscriptions, we need to set the offer token
+        // For subscriptions, use the stored offer token (which prefers intro offers)
         if (planType in SUBSCRIPTION_PRODUCT_IDS) {
-            val offerToken = details.subscriptionOfferDetails?.firstOrNull()?.offerToken
+            val storedToken = when (planType) {
+                PRODUCT_ID_MONTHLY -> monthlyOfferToken
+                PRODUCT_ID_YEARLY -> yearlyOfferToken
+                else -> null
+            }
+            val offerToken = storedToken
+                ?: details.subscriptionOfferDetails?.firstOrNull()?.offerToken
+
             if (offerToken != null) {
                 productDetailsParamsBuilder.setOfferToken(offerToken)
+                Log.d(TAG, "Using offer token for $planType: ${offerToken.take(20)}...")
             } else {
                 Log.e(TAG, "No offer token available for subscription: $planType")
+                _purchaseError.value = "Subscription offer not available. Please try again or choose a different plan."
+                querySubscriptionDetails()
                 return
             }
         }
@@ -351,7 +580,11 @@ class BillingManager @Inject constructor(
             .build()
 
         analyticsLogger.logPurchaseFlowStarted(planType)
-        billingClient?.launchBillingFlow(activity, billingFlowParams)
+        val result = billingClient?.launchBillingFlow(activity, billingFlowParams)
+        if (result?.responseCode != BillingClient.BillingResponseCode.OK) {
+            Log.e(TAG, "launchBillingFlow failed: code=${result?.responseCode}, msg=${result?.debugMessage}")
+            _purchaseError.value = "Could not open purchase dialog. Please try again."
+        }
     }
 
     override fun onPurchasesUpdated(billingResult: BillingResult, purchases: MutableList<Purchase>?) {
@@ -407,8 +640,7 @@ class BillingManager @Inject constructor(
 
     fun restorePurchases() {
         analyticsLogger.logRestorePurchases()
-        queryExistingPurchases()
-        queryExistingSubscriptions()
+        queryPurchases()
     }
 
     private fun isValidPurchase(purchase: Purchase): Boolean {

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +74,7 @@ fun AlarmReliabilityScreen(
     val context = LocalContext.current
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val skeletonOverlayEnabled by viewModel.skeletonOverlayEnabled.collectAsState()
+    val showLabelsEnabled by viewModel.showLabelsEnabled.collectAsState()
     var huaweiTapCount by remember { mutableIntStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -166,7 +169,9 @@ fun AlarmReliabilityScreen(
                 if (isDevModeEnabled) {
                     DebugToolsSection(
                         skeletonOverlayEnabled = skeletonOverlayEnabled,
-                        onSkeletonOverlayToggle = { viewModel.setSkeletonOverlayEnabled(it) }
+                        onSkeletonOverlayToggle = { viewModel.setSkeletonOverlayEnabled(it) },
+                        showLabelsEnabled = showLabelsEnabled,
+                        onShowLabelsToggle = { viewModel.setShowLabelsEnabled(it) }
                     )
                 }
 
@@ -337,7 +342,9 @@ private fun BrandGrid(
 @Composable
 private fun DebugToolsSection(
     skeletonOverlayEnabled: Boolean,
-    onSkeletonOverlayToggle: (Boolean) -> Unit
+    onSkeletonOverlayToggle: (Boolean) -> Unit,
+    showLabelsEnabled: Boolean,
+    onShowLabelsToggle: (Boolean) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
@@ -386,6 +393,37 @@ private fun DebugToolsSection(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
+                        text = "Show Labels",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Show detected objects in scan challenge.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+
+                androidx.compose.material3.Switch(
+                    checked = showLabelsEnabled,
+                    onCheckedChange = onShowLabelsToggle,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFFF1C46C),
+                        checkedTrackColor = Color(0xFFF1C46C).copy(alpha = 0.5f)
+                    )
+                )
+            }
+        }
+
+        GlassCard(contentPadding = PaddingValues(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
                         text = "Vibration Test",
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
@@ -414,6 +452,91 @@ private fun DebugToolsSection(
                         text = "TEST",
                         color = Color(0xFFF1C46C),
                         fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        GlassCard(contentPadding = PaddingValues(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Feedback Popup",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Test the in-app review feedback dialog.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+
+                val context = LocalContext.current
+                val activity = context as? android.app.Activity
+                val viewModel: SettingsViewModel = hiltViewModel()
+                var showFakeReviewDialog by remember { mutableStateOf(false) }
+
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        activity?.let { viewModel.testFeedbackPopup(it) }
+                        showFakeReviewDialog = true
+                    }
+                ) {
+                    Text(
+                        text = "SHOW",
+                        color = Color(0xFFF1C46C),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (showFakeReviewDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showFakeReviewDialog = false },
+                        title = {
+                            Text(
+                                text = "Enjoying Loud Alarm?",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text(
+                                    text = "(Simulated Google Play Review UI)\nThe real dialog doesn't show in local debug builds. This confirms the flow triggered.",
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    repeat(5) {
+                                        Icon(
+                                            imageVector = Icons.Default.Star,
+                                            contentDescription = "Star",
+                                            tint = Color.White.copy(alpha = 0.3f),
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = { showFakeReviewDialog = false }) {
+                                Text("Submit", color = Color(0xFFF1C46C))
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showFakeReviewDialog = false }) {
+                                Text("Not now", color = Color.White.copy(alpha = 0.6f))
+                            }
+                        },
+                        containerColor = Color(0xFF1A181C)
                     )
                 }
             }

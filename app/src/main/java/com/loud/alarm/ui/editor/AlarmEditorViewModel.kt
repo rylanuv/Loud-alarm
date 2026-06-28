@@ -87,6 +87,8 @@ class AlarmEditorViewModel @Inject constructor(
                     spellBeeCount = alarm.spellBeeCount,
                     audioMemoryDifficulty = alarm.audioMemoryDifficulty,
                     audioMemoryChallengeCount = alarm.audioMemoryChallengeCount,
+                    clockReadingDifficulty = alarm.clockReadingDifficulty,
+                    clockReadingCount = alarm.clockReadingCount,
                     timePickerVersion = _uiState.value.timePickerVersion + 1
                 )
             }
@@ -142,6 +144,7 @@ class AlarmEditorViewModel @Inject constructor(
                 return false
             }
             current.add(type)
+            analyticsLogger.logChallengeSelected(type.name)
         }
         // If nothing selected, default back to NONE
         if (current.isEmpty()) {
@@ -231,6 +234,14 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(audioMemoryChallengeCount = count)
     }
 
+    fun updateClockReadingDifficulty(difficulty: MathDifficulty) {
+        _uiState.value = _uiState.value.copy(clockReadingDifficulty = difficulty)
+    }
+
+    fun updateClockReadingCount(count: Int) {
+        _uiState.value = _uiState.value.copy(clockReadingCount = count)
+    }
+
     fun updateSinkImageUri(uri: String?) {
         _uiState.value = _uiState.value.copy(sinkImageUri = uri)
     }
@@ -281,6 +292,8 @@ class AlarmEditorViewModel @Inject constructor(
                 spellBeeCount = state.spellBeeCount,
                 audioMemoryDifficulty = state.audioMemoryDifficulty,
                 audioMemoryChallengeCount = state.audioMemoryChallengeCount,
+                clockReadingDifficulty = state.clockReadingDifficulty,
+                clockReadingCount = state.clockReadingCount,
                 enabled = true
             )
 
@@ -334,5 +347,7 @@ data class AlarmUiState(
     val spellBeeCount: Int = 3,
     val audioMemoryDifficulty: MathDifficulty = MathDifficulty.EASY,
     val audioMemoryChallengeCount: Int = 3,
+    val clockReadingDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val clockReadingCount: Int = 1,
     val timePickerVersion: Int = 0
 )
