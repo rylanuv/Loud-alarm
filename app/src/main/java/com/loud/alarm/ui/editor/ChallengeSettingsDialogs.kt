@@ -564,6 +564,11 @@ fun getChallengePreviewInfo(type: ChallengeType): Pair<String, List<String>> {
             "Must unplug and re-plug if already charging",
             "No extra permissions needed"
         )
+        ChallengeType.ROOM_LIGHT -> "Turn on the room light to dismiss." to listOf(
+            "Uses the ambient light sensor",
+            "Forces you to get out of bed",
+            "Works best in a dark room"
+        )
         ChallengeType.CLOCK_READING -> "Read an analogue clock and type the time to dismiss." to listOf(
             "Beautiful canvas-drawn clock face",
             "4 difficulty levels",
@@ -611,6 +616,7 @@ fun getChallengeSettingsSummary(type: ChallengeType, uiState: AlarmUiState): Str
             "$d · ${r}R"
         }
         ChallengeType.CHARGER -> null
+        ChallengeType.ROOM_LIGHT -> "${uiState.roomLightTargetLux} lux"
         ChallengeType.CLOCK_READING -> {
             val d = uiState.clockReadingDifficulty.name.lowercase().replaceFirstChar { it.uppercase() }
             val r = uiState.clockReadingCount
@@ -643,6 +649,7 @@ fun getChallengeTileSubtitle(type: ChallengeType): String {
         ChallengeType.REVERSE_TYPING -> "Reverse text"
         ChallengeType.AUDIO_MEMORY -> "Replay sounds"
         ChallengeType.CHARGER -> "Plug in"
+        ChallengeType.ROOM_LIGHT -> "Turn on Lights"
         ChallengeType.CLOCK_READING -> "Read time"
     }
 }

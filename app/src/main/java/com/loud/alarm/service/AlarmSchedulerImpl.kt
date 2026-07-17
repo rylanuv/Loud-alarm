@@ -7,20 +7,25 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import com.loud.alarm.data.Alarm
+import com.loud.alarm.data.SettingsRepository
 import com.loud.alarm.ui.alarm.AlarmActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 
 class AlarmSchedulerImpl @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val settingsRepository: SettingsRepository
 ) : AlarmScheduler {
 
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     companion object {
         private const val TAG = "AlarmSchedulerImpl"
+        private const val UPCOMING_LEAD_TIME_MS = 30 * 60 * 1000L // 30 minutes
     }
 
     override fun schedule(alarm: Alarm) {
@@ -86,6 +91,9 @@ class AlarmSchedulerImpl @Inject constructor(
                 Log.e(TAG, "All scheduling methods failed for alarm ${alarm.id}", e2)
             }
         }
+
+        // Schedule upcoming alarm notification (30 min before)
+        scheduleUpcomingNotification(alarm, triggerTime)
     }
 
     override fun cancel(alarm: Alarm) {
@@ -99,6 +107,9 @@ class AlarmSchedulerImpl @Inject constructor(
         alarmManager.cancel(pendingIntent)
         pendingIntent.cancel()
         Log.d(TAG, "Alarm ${alarm.id} cancelled")
+
+        // Also cancel any upcoming notification for this alarm
+        cancelUpcomingNotification(alarm.id)
     }
 
     override fun scheduleSnooze(alarm: Alarm, delayMinutes: Int) {
@@ -183,5 +194,78 @@ class AlarmSchedulerImpl @Inject constructor(
     // Convert java.time.DayOfWeek (1=Mon) to Calendar constants (1=Sun, 2=Mon)
     private fun javaDayToCalendarDay(javaDay: Int): Int {
         return if (javaDay == 7) 1 else javaDay + 1
+    }
+
+    // --- Upcoming Alarm Notification ---
+
+    /**
+     * Schedules a notification to fire 30 minutes before [alarmTriggerTimeMs],
+     * but only if the user has enabled the "Upcoming Alarm Notification" setting.
+     * If the alarm is less than 30 minutes away, no notification is scheduled.
+     */
+    private fun scheduleUpcomingNotification(alarm: Alarm, alarmTriggerTimeMs: Long) {
+        // Read the setting — schedule() is always called from a background thread
+        val enabled = try {
+            runBlocking { settingsRepository.upcomingAlarmNotificationEnabled.first() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read upcoming alarm notification setting", e)
+            false
+        }
+
+        // Always cancel any previous upcoming notification for this alarm first
+        cancelUpcomingNotification(alarm.id)
+
+        if (!enabled) {
+            Log.d(TAG, "Upcoming alarm notification disabled by user, skipping for alarm ${alarm.id}")
+            return
+        }
+
+        val notifyTime = alarmTriggerTimeMs - UPCOMING_LEAD_TIME_MS
+        if (notifyTime <= System.currentTimeMillis()) {
+            Log.d(TAG, "Alarm ${alarm.id} is less than 30 min away, skipping upcoming notification")
+            return
+        }
+
+        val intent = Intent(context, UpcomingAlarmReceiver::class.java).apply {
+            putExtra(AlarmService.EXTRA_ALARM_ID, alarm.id)
+            putExtra(UpcomingAlarmReceiver.EXTRA_ALARM_LABEL, alarm.label)
+            putExtra(UpcomingAlarmReceiver.EXTRA_ALARM_HOUR, alarm.hour)
+            putExtra(UpcomingAlarmReceiver.EXTRA_ALARM_MINUTE, alarm.minute)
+        }
+
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            UpcomingAlarmReceiver.REQUEST_CODE_OFFSET + alarm.id,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                notifyTime,
+                pendingIntent
+            )
+            Log.d(TAG, "Upcoming notification scheduled for alarm ${alarm.id} at ${
+                java.time.Instant.ofEpochMilli(notifyTime).atZone(ZoneId.systemDefault())
+            }")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule upcoming notification for alarm ${alarm.id}", e)
+        }
+    }
+
+    /**
+     * Cancels any previously scheduled upcoming notification for the given alarm.
+     */
+    private fun cancelUpcomingNotification(alarmId: Int) {
+        val intent = Intent(context, UpcomingAlarmReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            UpcomingAlarmReceiver.REQUEST_CODE_OFFSET + alarmId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
     }
 }

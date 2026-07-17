@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -55,10 +56,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
+import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -90,6 +95,8 @@ fun SettingsScreen(
     val fadeInEnabled by viewModel.fadeInEnabled.collectAsState()
     val fadeInDuration by viewModel.fadeInDuration.collectAsState()
     val autoSilenceDuration by viewModel.autoSilenceDuration.collectAsState()
+    val upcomingAlarmNotification by viewModel.upcomingAlarmNotificationEnabled.collectAsState()
+    val preventUninstallEnabled by viewModel.preventUninstallEnabled.collectAsState()
     
     var showFadeInWarningDialog by remember { mutableStateOf(false) }
     val vibrationPatternName by viewModel.vibrationPattern.collectAsState()
@@ -97,6 +104,42 @@ fun SettingsScreen(
     var showVibrationPatternDialog by remember { mutableStateOf(false) }
     val isPremium by viewModel.isPremium.collectAsState()
     val context = LocalContext.current
+
+    // Device Admin setup for Prevent Uninstall
+    val devicePolicyManager = remember {
+        context.getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    }
+    val adminComponent = remember {
+        ComponentName(context, com.loud.alarm.service.LoudAlarmDeviceAdminReceiver::class.java)
+    }
+    val isDeviceAdmin = remember(preventUninstallEnabled) {
+        devicePolicyManager.isAdminActive(adminComponent)
+    }
+
+    // Sync preference with actual device admin status on resume
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val currentlyAdmin = devicePolicyManager.isAdminActive(adminComponent)
+                if (preventUninstallEnabled != currentlyAdmin) {
+                    viewModel.setPreventUninstallEnabled(currentlyAdmin)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Launcher for Device Admin activation
+    val deviceAdminLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.setPreventUninstallEnabled(true)
+        }
+        // If user cancelled, preference stays false
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.foundation.Image(
@@ -182,6 +225,44 @@ fun SettingsScreen(
                             value = autoSilenceDuration.toFloat(),
                             valueRange = 5f..60f,
                             onValueChange = { viewModel.setAutoSilenceDuration((kotlin.math.round(it / 5f) * 5f).toInt()) }
+                        )
+
+                        SettingDivider()
+
+                        // Upcoming Alarm Notification
+                        SettingToggleItem(
+                            icon = Icons.Default.Notifications,
+                            title = "Upcoming Alarm Alert",
+                            subtitle = "Show notification 30 min before alarm",
+                            checked = upcomingAlarmNotification,
+                            onCheckedChange = { viewModel.setUpcomingAlarmNotificationEnabled(it) }
+                        )
+
+                        SettingDivider()
+
+                        // Prevent Uninstall Toggle
+                        SettingToggleItem(
+                            icon = Icons.Default.Lock,
+                            title = "Prevent Uninstall",
+                            subtitle = if (preventUninstallEnabled) "App cannot be uninstalled" else "Allow app uninstallation",
+                            checked = preventUninstallEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    // Request Device Admin activation
+                                    val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                                        putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                                        putExtra(
+                                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                            "Loud Alarm needs Device Administrator access to prevent uninstallation while alarms are active."
+                                        )
+                                    }
+                                    deviceAdminLauncher.launch(intent)
+                                } else {
+                                    // Remove Device Admin and update preference
+                                    devicePolicyManager.removeActiveAdmin(adminComponent)
+                                    viewModel.setPreventUninstallEnabled(false)
+                                }
+                            }
                         )
 
                         
@@ -286,6 +367,23 @@ fun SettingsScreen(
                                     putExtra(Intent.EXTRA_SUBJECT, "Loud Alarm Feedback")
                                 }
                                 context.startActivity(Intent.createChooser(intent, "Send email"))
+                            }
+                        )
+                        SettingDivider()
+                        SettingClickableItem(
+                            icon = Icons.Default.Share,
+                            title = "Share with Friends",
+                            subtitle = "Recommend this app to others",
+                            onClick = {
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, "Check out Loud Alarm!")
+                                    putExtra(
+                                        Intent.EXTRA_TEXT,
+                                        "Hey! I use Loud Alarm to make sure I never oversleep. It has crazy challenges that force you to wake up! Try it out: https://play.google.com/store/apps/details?id=${context.packageName}"
+                                    )
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                             }
                         )
                     }

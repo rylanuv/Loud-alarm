@@ -89,6 +89,7 @@ class AlarmEditorViewModel @Inject constructor(
                     audioMemoryChallengeCount = alarm.audioMemoryChallengeCount,
                     clockReadingDifficulty = alarm.clockReadingDifficulty,
                     clockReadingCount = alarm.clockReadingCount,
+                    roomLightTargetLux = alarm.roomLightTargetLux,
                     timePickerVersion = _uiState.value.timePickerVersion + 1
                 )
             }
@@ -242,6 +243,10 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(clockReadingCount = count)
     }
 
+    fun updateRoomLightTargetLux(lux: Int) {
+        _uiState.value = _uiState.value.copy(roomLightTargetLux = lux.coerceIn(10, 800))
+    }
+
     fun updateSinkImageUri(uri: String?) {
         _uiState.value = _uiState.value.copy(sinkImageUri = uri)
     }
@@ -294,6 +299,7 @@ class AlarmEditorViewModel @Inject constructor(
                 audioMemoryChallengeCount = state.audioMemoryChallengeCount,
                 clockReadingDifficulty = state.clockReadingDifficulty,
                 clockReadingCount = state.clockReadingCount,
+                roomLightTargetLux = state.roomLightTargetLux,
                 enabled = true
             )
 
@@ -349,5 +355,6 @@ data class AlarmUiState(
     val audioMemoryChallengeCount: Int = 3,
     val clockReadingDifficulty: MathDifficulty = MathDifficulty.EASY,
     val clockReadingCount: Int = 1,
+    val roomLightTargetLux: Int = 100,
     val timePickerVersion: Int = 0
 )

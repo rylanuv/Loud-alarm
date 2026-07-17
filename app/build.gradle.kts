@@ -18,8 +18,8 @@ android {
         applicationId = "com.loud.alarm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.6.1"
+        versionCode = 24
+        versionName = "1.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

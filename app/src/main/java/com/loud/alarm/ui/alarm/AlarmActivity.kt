@@ -84,6 +84,7 @@ import com.loud.alarm.ui.challenge.PushUpChallengeScreen
 import com.loud.alarm.ui.challenge.ReverseTypingChallengeScreen
 import com.loud.alarm.ui.challenge.AudioMemoryChallengeScreen
 import com.loud.alarm.ui.challenge.ChargerChallengeScreen
+import com.loud.alarm.ui.challenge.LightChallengeScreen
 import com.loud.alarm.ui.challenge.ClockReadingChallengeScreen
 import com.loud.alarm.ui.challenge.RandomObjectPickerScreen
 import com.loud.alarm.ui.challenge.TapChallengeScreen
@@ -413,6 +414,11 @@ class AlarmActivity : ComponentActivity() {
         // Block back button — user must solve the challenge
         // Intentionally not calling super to prevent back navigation
     }
+
+    override fun finish() {
+        super.finishAndRemoveTask()
+        overridePendingTransition(0, 0)
+    }
 }
 
 @Composable
@@ -448,6 +454,7 @@ fun ActiveAlarmScreen(
         var audioMemorySolved by rememberSaveable { mutableStateOf(false) }
         var chargerSolved by rememberSaveable { mutableStateOf(false) }
         var clockReadingSolved by rememberSaveable { mutableStateOf(false) }
+        var roomLightSolved by rememberSaveable { mutableStateOf(false) }
         val context = LocalContext.current
         val isSubscribed by viewModel.isSubscribed.collectAsState()
         val alarmDismissCount by viewModel.alarmDismissCount.collectAsState()
@@ -483,6 +490,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.AUDIO_MEMORY -> audioMemorySolved
                 ChallengeType.CHARGER -> chargerSolved
                 ChallengeType.CLOCK_READING -> clockReadingSolved
+                ChallengeType.ROOM_LIGHT -> roomLightSolved
                 ChallengeType.NONE -> true
             }
         }
@@ -508,6 +516,7 @@ fun ActiveAlarmScreen(
                 ChallengeType.AUDIO_MEMORY -> !audioMemorySolved
                 ChallengeType.CHARGER -> !chargerSolved
                 ChallengeType.CLOCK_READING -> !clockReadingSolved
+                ChallengeType.ROOM_LIGHT -> !roomLightSolved
                 ChallengeType.NONE -> false
             }
         }
@@ -799,6 +808,12 @@ fun ActiveAlarmScreen(
                                 difficulty = alarm.clockReadingDifficulty,
                                 questionCount = alarm.clockReadingCount,
                                 onSuccess = { clockReadingSolved = true }
+                            )
+                        }
+                        ChallengeType.ROOM_LIGHT -> {
+                            LightChallengeScreen(
+                                targetLux = alarm.roomLightTargetLux,
+                                onSuccess = { roomLightSolved = true }
                             )
                         }
                         else -> {

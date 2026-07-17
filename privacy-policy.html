@@ -125,7 +125,7 @@
     <div class="container">
         <h1>Privacy Policy</h1>
         <p class="subtitle">Loud Alarm – Solve2Wake</p>
-        <p class="effective-date"><strong>Effective Date:</strong> June 19, 2026</p>
+        <p class="effective-date"><strong>Effective Date:</strong> June 30, 2026</p>
 
         <div class="highlight-box">
             <p><strong>Summary:</strong> Loud Alarm – Solve2Wake does <strong>not collect or share</strong> any personally identifiable information. Your alarm and configuration data is stored locally on your device. We use anonymized analytics (including a resettable advertising identifier) to improve the app experience.
@@ -231,6 +231,7 @@
                 Play.</li>
             <li><strong>Internet &amp; Network State:</strong> Required to transmit anonymized analytics data to help improve the App.</li>
             <li><strong>Accessibility Service:</strong> Optional. If enabled, the App uses an Accessibility Service solely to prevent the device from being powered off while an alarm is actively ringing. This service does <strong>not</strong> read, collect, or transmit any personal data, screen content, or keystrokes. It is active <strong>only</strong> during an alarm event.</li>
+            <li><strong>Device Administrator:</strong> Optional. If enabled via the "Prevent Uninstall" setting, the App registers as a Device Administrator solely to prevent its own uninstallation while alarms are active. This permission does <strong>not</strong> grant the App access to any personal data, device passwords, or other device management capabilities. No policies are enforced — the App only uses the side-effect that a device administrator cannot be uninstalled. You can disable this at any time from the App's settings when no alarm is ringing, or from your device's Settings → Security → Device Administrators.</li>
         </ul>
 
         <h2>6. Third-Party Services</h2>
@@ -240,10 +241,16 @@
             server.
         </p>
         <p>
-            The App also uses <strong>Google ML Kit Image Labeling</strong> (Play Services variant) for the Scan Sink and Scan Object challenges. This library uses on-device machine learning to identify objects through the camera. All image processing happens <strong>entirely on your device</strong>; no images or recognition data are transmitted to any server or third party.
+            The App also uses <strong>Google ML Kit Image Labeling</strong> (Play Services variant) and <strong>Google ML Kit Object Detection</strong> for the Scan Sink and Scan Object challenges. These libraries use on-device machine learning to identify and locate objects through the camera. All image processing happens <strong>entirely on your device</strong>; no images or recognition data are transmitted to any server or third party.
+        </p>
+        <p>
+            The App uses <strong>Google ML Kit Pose Detection</strong> for the Push-Up challenge. This library uses on-device machine learning to detect body pose landmarks through the camera in real-time. All pose data is processed <strong>entirely on your device</strong> and is never stored or transmitted.
         </p>
         <p>
             The App uses <strong>Google Analytics for Firebase</strong> to collect anonymized usage data (including the Google Advertising ID) to help us understand how users interact with the App. The Advertising ID is a resettable, anonymous identifier and is <strong>not</strong> used for personalized advertising. You can learn more about how Google uses data at <a href="https://policies.google.com/technologies/partner-sites" target="_blank">Google's Privacy &amp; Terms site</a>. No advertising networks are integrated into the App.
+        </p>
+        <p>
+            The App uses <strong>Google Play In-App Review</strong> to occasionally prompt you to rate the App. This flow is handled entirely by the Google Play system and does not collect or transmit any additional data from the App.
         </p>
 
         <h2>7. Data Sharing</h2>

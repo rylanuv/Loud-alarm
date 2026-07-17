@@ -8,6 +8,7 @@ import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.AlarmRepository
 import com.loud.alarm.review.InAppReviewManager
+import com.loud.alarm.share.SharePromptManager
 import com.loud.alarm.service.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +29,7 @@ class HomeViewModel @Inject constructor(
     private val repository: AlarmRepository,
     private val scheduler: AlarmScheduler,
     private val reviewManager: InAppReviewManager,
+    private val sharePromptManager: SharePromptManager,
     private val analyticsLogger: AnalyticsLogger
 ) : ViewModel() {
 
@@ -153,5 +155,21 @@ class HomeViewModel @Inject constructor(
 
     private fun Alarm.analyticsChallengeTypes(): String {
         return challengeTypes.joinToString(",") { it.name }
+    }
+
+    /**
+     * Check if 10 days have passed since the last share prompt.
+     */
+    suspend fun shouldShowSharePrompt(): Boolean {
+        return sharePromptManager.shouldShowSharePrompt()
+    }
+
+    /**
+     * Record that the share prompt was shown/dismissed.
+     */
+    fun onSharePromptShown() {
+        viewModelScope.launch {
+            sharePromptManager.onSharePromptShown()
+        }
     }
 }

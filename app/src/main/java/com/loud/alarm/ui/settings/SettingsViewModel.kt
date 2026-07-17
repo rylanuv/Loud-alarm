@@ -64,6 +64,12 @@ class SettingsViewModel @Inject constructor(
     val showLabelsEnabled: StateFlow<Boolean> = settingsRepository.showLabelsEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val preventUninstallEnabled: StateFlow<Boolean> = settingsRepository.preventUninstallEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val upcomingAlarmNotificationEnabled: StateFlow<Boolean> = settingsRepository.upcomingAlarmNotificationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
 
     fun setVibrationEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -136,6 +142,18 @@ class SettingsViewModel @Inject constructor(
     fun setShowLabelsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setShowLabelsEnabled(enabled)
+        }
+    }
+
+    fun setPreventUninstallEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setPreventUninstallEnabled(enabled)
+        }
+    }
+
+    fun setUpcomingAlarmNotificationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setUpcomingAlarmNotificationEnabled(enabled)
         }
     }
 

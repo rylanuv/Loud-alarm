@@ -64,8 +64,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Refresh purchases and subscription status whenever the app enters the foreground
-        billingManager.restorePurchases()
+        // Refresh purchases and subscription status whenever the app enters the foreground.
+        // Uses throttling to avoid excessive Google Play queries on rapid resume cycles.
+        billingManager.refreshPurchasesIfStale()
     }
 }
 

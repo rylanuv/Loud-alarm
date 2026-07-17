@@ -99,6 +99,7 @@ import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Wc
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -576,6 +577,7 @@ fun AlarmEditorScreen(
                         ChallengeType.TAP_CHALLENGE to Triple(Icons.Default.TouchApp, "Tap", IconGreen),
                         ChallengeType.CHARGER to Triple(Icons.Default.Power, "Charger", IconGreen),
                         ChallengeType.CLOCK_READING to Triple(Icons.Default.AccessTime, "Clock Reading", IconAmber),
+                        ChallengeType.ROOM_LIGHT to Triple(Icons.Default.LightMode, "Lights on", IconAmber),
                         ChallengeType.STEP to Triple(Icons.AutoMirrored.Filled.DirectionsWalk, "Steps", IconOrange),
                         ChallengeType.MAZE to Triple(Icons.Default.Gamepad, "Maze", IconGreen),
                         ChallengeType.MEMORY to Triple(Icons.Default.Psychology, "Memory", IconPink),
@@ -601,7 +603,8 @@ fun AlarmEditorScreen(
                         ChallengeType.SQUAT,
                         ChallengeType.PUSH_UP,
                         ChallengeType.REVERSE_TYPING,
-                        ChallengeType.AUDIO_MEMORY
+                        ChallengeType.AUDIO_MEMORY,
+                        ChallengeType.ROOM_LIGHT
                     )
                     var showSettingsForChallenge by remember { mutableStateOf<ChallengeType?>(null) }
                     var showPreviewForChallenge by remember { mutableStateOf<ChallengeType?>(null) }
@@ -1290,6 +1293,95 @@ fun AlarmEditorScreen(
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = Color.White.copy(alpha = 0.7f)
                                         )
+                                    }
+                                    ChallengeType.ROOM_LIGHT -> {
+                                        Text(
+                                            "Turn on your room light to dismiss the alarm.\n\nSet the brightness target your room light needs to reach.\n\nDirect your phone screen towards light to see increase in light level.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.White.copy(alpha = 0.7f)
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+
+                                        // Live lux sensor reading
+                                        val sensorContext = LocalContext.current
+                                        var currentLux by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+                                        androidx.compose.runtime.DisposableEffect(Unit) {
+                                            val sensorManager = sensorContext.getSystemService(android.content.Context.SENSOR_SERVICE) as android.hardware.SensorManager
+                                            val lightSensor = sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT)
+                                            if (lightSensor != null) {
+                                                val listener = object : android.hardware.SensorEventListener {
+                                                    override fun onSensorChanged(event: android.hardware.SensorEvent?) {
+                                                        event?.values?.getOrNull(0)?.let { currentLux = it }
+                                                    }
+                                                    override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+                                                }
+                                                sensorManager.registerListener(listener, lightSensor, android.hardware.SensorManager.SENSOR_DELAY_UI)
+                                                onDispose { try { sensorManager.unregisterListener(listener) } catch (_: Exception) {} }
+                                            } else {
+                                                onDispose {}
+                                            }
+                                        }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(Color.White.copy(alpha = 0.06f))
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.LightMode,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFDD835),
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(
+                                                    "Current Brightness",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color.White.copy(alpha = 0.5f)
+                                                )
+                                                Text(
+                                                    "${currentLux.toInt()} lux",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "Target Brightness",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = Color.White.copy(alpha = 0.7f)
+                                                )
+                                                Text(
+                                                    "${uiState.roomLightTargetLux} lux",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            androidx.compose.material3.Slider(
+                                                value = uiState.roomLightTargetLux.coerceIn(10, 800).toFloat(),
+                                                onValueChange = { viewModel.updateRoomLightTargetLux(it.toInt()) },
+                                                valueRange = 10f..800f,
+                                                colors = androidx.compose.material3.SliderDefaults.colors(
+                                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                                                )
+                                            )
+                                        }
                                     }
                                     ChallengeType.CLOCK_READING -> {
                                         DifficultySelector(

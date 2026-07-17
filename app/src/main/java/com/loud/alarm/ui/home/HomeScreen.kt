@@ -47,7 +47,9 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,6 +66,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
+import android.net.Uri
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import com.loud.alarm.service.AlarmReceiver
 import com.loud.alarm.service.AlarmService
 import com.loud.alarm.R
@@ -86,6 +92,7 @@ fun HomeScreen(
     val nextAlarm by viewModel.nextAlarm.collectAsState()
     val timeUntilNext by viewModel.timeUntilNextAlarmValues.collectAsState()
     val permissionsStatus = rememberRequiredPermissionsStatus()
+    val localContext = LocalContext.current
 
     // In-App Review: check eligibility when HomeScreen is composed
     // (user may have just returned from dismissing an alarm)
@@ -94,6 +101,71 @@ fun HomeScreen(
         if (activity != null && viewModel.shouldRequestReview()) {
             viewModel.requestReview(activity)
         }
+    }
+
+    // Share Prompt: check if 10 days have passed
+    var showShareDialog by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (viewModel.shouldShowSharePrompt()) {
+            showShareDialog = true
+            viewModel.onSharePromptShown()
+        }
+    }
+
+    // Share Dialog
+    if (showShareDialog) {
+        AlertDialog(
+            onDismissRequest = { showShareDialog = false },
+            containerColor = Color(0xFF1A181C),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            icon = {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = {
+                Text(
+                    "Enjoying Loud Alarm?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "Share the app with your friends and help them never oversleep again!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showShareDialog = false
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Check out Loud Alarm!")
+                            putExtra(
+                                Intent.EXTRA_TEXT,
+                                "Hey! I use Loud Alarm to make sure I never oversleep. " +
+                                        "It has crazy challenges that force you to wake up! " +
+                                        "Try it out: https://play.google.com/store/apps/details?id=${localContext.packageName}"
+                            )
+                        }
+                        localContext.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                    }
+                ) {
+                    Text("Share Now", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showShareDialog = false }) {
+                    Text("Maybe Later", color = Color.White.copy(alpha = 0.6f))
+                }
+            }
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -516,6 +588,7 @@ fun AlarmItemContent(
                                 ChallengeType.AUDIO_MEMORY -> "Audio Memory"
                                 ChallengeType.CLOCK_READING -> "Clock Reading"
                                 ChallengeType.CHARGER -> "Charger"
+                                ChallengeType.ROOM_LIGHT -> "Lights on"
                                 else -> type.name
                             }
                         }

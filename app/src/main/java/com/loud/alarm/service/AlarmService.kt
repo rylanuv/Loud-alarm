@@ -685,24 +685,22 @@ class AlarmService : Service() {
         }
 
         try {
-            val launchPendingIntent = PendingIntent.getActivity(
-                this,
-                alarmId + 20_000,
-                activityIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            launchPendingIntent.send()
-            Log.d(TAG, "AlarmActivity launched from service via PendingIntent")
-        } catch (e: PendingIntent.CanceledException) {
-            Log.e(TAG, "PendingIntent canceled while launching AlarmActivity; falling back", e)
-            try {
-                startActivity(activityIntent)
-                Log.d(TAG, "AlarmActivity fallback startActivity launch succeeded")
-            } catch (fallbackError: Exception) {
-                Log.e(TAG, "Fallback startActivity launch failed", fallbackError)
-            }
+            startActivity(activityIntent)
+            Log.d(TAG, "AlarmActivity launched from service via startActivity")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start AlarmActivity from service", e)
+            Log.w(TAG, "Direct startActivity failed (likely background restriction); falling back to PendingIntent", e)
+            try {
+                val launchPendingIntent = PendingIntent.getActivity(
+                    this,
+                    alarmId + 20_000,
+                    activityIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                launchPendingIntent.send()
+                Log.d(TAG, "AlarmActivity launched from service via PendingIntent")
+            } catch (pendingError: Exception) {
+                Log.e(TAG, "Failed to launch AlarmActivity via PendingIntent fallback", pendingError)
+            }
         }
     }
 

@@ -153,7 +153,7 @@ fun OnboardingScreen(
                     )
                     3 -> PermissionSetupPage(
                         title = "Enable required permissions",
-                        description = "Two quick setup items help alarms stay reliable.",
+                        description = "Three quick setup items help alarms stay reliable.",
                         isVisible = true
                     )
                     else -> ReadyPage(

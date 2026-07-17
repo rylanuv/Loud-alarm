@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,6 +41,9 @@ class SettingsRepository @Inject constructor(
         val SKELETON_OVERLAY_ENABLED = booleanPreferencesKey("skeleton_overlay_enabled")
         val SHOW_LABELS_ENABLED = booleanPreferencesKey("show_labels_enabled")
         val PREVENT_POWER_OFF_ENABLED = booleanPreferencesKey("prevent_power_off_enabled")
+        val PREVENT_UNINSTALL_ENABLED = booleanPreferencesKey("prevent_uninstall_enabled")
+        val LAST_SHARE_PROMPT_TIME = longPreferencesKey("last_share_prompt_time")
+        val UPCOMING_ALARM_NOTIFICATION = booleanPreferencesKey("upcoming_alarm_notification")
     }
 
     val vibrationEnabled: Flow<Boolean> = context.dataStore.data
@@ -107,6 +111,15 @@ class SettingsRepository @Inject constructor(
             preferences[PreferencesKeys.SHOW_LABELS_ENABLED] ?: false
         }
 
+    val preventUninstallEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.PREVENT_UNINSTALL_ENABLED] ?: false
+        }
+
+    val upcomingAlarmNotificationEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.UPCOMING_ALARM_NOTIFICATION] ?: false
+        }
 
     suspend fun setVibrationEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences: MutablePreferences ->
@@ -186,6 +199,17 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    suspend fun setPreventUninstallEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.PREVENT_UNINSTALL_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setUpcomingAlarmNotificationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.UPCOMING_ALARM_NOTIFICATION] = enabled
+        }
+    }
 
     // --- In-App Review tracking ---
 
@@ -214,6 +238,19 @@ class SettingsRepository @Inject constructor(
     suspend fun setNextReviewDismissMilestone(milestone: Int) {
         context.dataStore.edit { preferences: MutablePreferences ->
             preferences[PreferencesKeys.NEXT_REVIEW_DISMISS_MILESTONE] = milestone
+        }
+    }
+
+    // --- Share Prompt tracking ---
+
+    val lastSharePromptTime: Flow<Long> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.LAST_SHARE_PROMPT_TIME] ?: 0L
+        }
+
+    suspend fun setLastSharePromptTime(timeMillis: Long) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.LAST_SHARE_PROMPT_TIME] = timeMillis
         }
     }
 }

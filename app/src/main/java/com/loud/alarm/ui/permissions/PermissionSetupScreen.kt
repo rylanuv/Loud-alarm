@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -94,7 +95,8 @@ data class RequiredPermissionsStatus(
 }
 enum class RequiredPermissionType {
     BATTERY_OPTIMIZATION,
-    NOTIFICATIONS
+    NOTIFICATIONS,
+    DISPLAY_OVER_OTHER_APPS
 }
 
 @Composable
@@ -258,6 +260,10 @@ fun PermissionSetupPage(
             }
 
             RequiredPermissionType.BATTERY_OPTIMIZATION -> {
+                settingsLauncher.launch(nextPrompt.buildIntent(context))
+            }
+
+            RequiredPermissionType.DISPLAY_OVER_OTHER_APPS -> {
                 settingsLauncher.launch(nextPrompt.buildIntent(context))
             }
         }
@@ -515,6 +521,15 @@ private fun Context.readRequiredPermissionsStatus(): RequiredPermissionsStatus {
             )
         }
 
+        add(
+            RequiredPermissionItem(
+                type = RequiredPermissionType.DISPLAY_OVER_OTHER_APPS,
+                title = "Display over other apps",
+                description = "Allows the alarm screen to open in full screen immediately when ringing.",
+                granted = Settings.canDrawOverlays(this@readRequiredPermissionsStatus),
+                icon = Icons.Default.PhoneAndroid
+            )
+        )
     }
 
     return RequiredPermissionsStatus(items = items)
@@ -551,6 +566,15 @@ private fun RequiredPermissionType.buildIntent(context: Context): Intent {
         RequiredPermissionType.NOTIFICATIONS -> listOf(
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                 putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            },
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = packageUri
+            }
+        )
+
+        RequiredPermissionType.DISPLAY_OVER_OTHER_APPS -> listOf(
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                data = packageUri
             },
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = packageUri

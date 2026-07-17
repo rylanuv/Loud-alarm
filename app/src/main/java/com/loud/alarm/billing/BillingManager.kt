@@ -68,6 +68,10 @@ class BillingManager @Inject constructor(
     private var monthlyOfferToken: String? = null
     private var yearlyOfferToken: String? = null
 
+    // Throttle: track last time purchases were queried to avoid excessive Google Play calls
+    private var lastPurchaseQueryTimeMs: Long = 0L
+    private val purchaseQueryThrottleMs: Long = 30_000L // 30 seconds
+
     private val _isQrCodePurchased = MutableStateFlow(false)
     val isQrCodePurchased: StateFlow<Boolean> = _isQrCodePurchased.asStateFlow()
 
@@ -410,6 +414,7 @@ class BillingManager @Inject constructor(
     }
 
     private fun queryPurchases() {
+        lastPurchaseQueryTimeMs = System.currentTimeMillis()
         billingClient?.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder()
                 .setProductType(BillingClient.ProductType.INAPP)
@@ -641,6 +646,21 @@ class BillingManager @Inject constructor(
     fun restorePurchases() {
         analyticsLogger.logRestorePurchases()
         queryPurchases()
+    }
+
+    /**
+     * Refresh purchases only if enough time has passed since the last query.
+     * Use this for automatic lifecycle refreshes (e.g. onResume) to avoid
+     * excessive Google Play queries. For manual restore, use [restorePurchases].
+     */
+    fun refreshPurchasesIfStale() {
+        val now = System.currentTimeMillis()
+        if (now - lastPurchaseQueryTimeMs >= purchaseQueryThrottleMs) {
+            Log.d(TAG, "Refreshing purchases (stale check passed)")
+            queryPurchases()
+        } else {
+            Log.d(TAG, "Skipping purchase refresh (last query ${(now - lastPurchaseQueryTimeMs) / 1000}s ago)")
+        }
     }
 
     private fun isValidPurchase(purchase: Purchase): Boolean {
