@@ -245,9 +245,21 @@ fun HomeScreen(
                     items(alarms, key = { it.id }) { alarm ->
                         SwipeableAlarmItem(
                             alarm = alarm,
-                            onToggle = { viewModel.toggleAlarm(alarm) },
-                            onClick = { onNavigateToEditor(alarm.id) },
-                            onDelete = { viewModel.deleteAlarm(alarm) }
+                            onToggle = { 
+                                viewModel.handleAlarmAction(alarm, { viewModel.toggleAlarm(alarm) }, {
+                                    android.widget.Toast.makeText(localContext, "Cannot edit alarm within 30 minutes of ringing", android.widget.Toast.LENGTH_SHORT).show()
+                                }) 
+                            },
+                            onClick = { 
+                                viewModel.handleAlarmAction(alarm, { onNavigateToEditor(alarm.id) }, {
+                                    android.widget.Toast.makeText(localContext, "Cannot edit alarm within 30 minutes of ringing", android.widget.Toast.LENGTH_SHORT).show()
+                                })
+                            },
+                            onDelete = { 
+                                viewModel.handleAlarmAction(alarm, { viewModel.deleteAlarm(alarm) }, {
+                                    android.widget.Toast.makeText(localContext, "Cannot delete alarm within 30 minutes of ringing", android.widget.Toast.LENGTH_SHORT).show()
+                                })
+                            }
                         )
                     }
                     // Spacer for FAB

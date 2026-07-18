@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.loud.alarm.data.AlarmRepository
+import com.loud.alarm.ui.alarm.AlarmActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,9 +51,22 @@ class AlarmReceiver : BroadcastReceiver() {
             Log.e(TAG, "Failed to start AlarmService", e)
         }
 
-        // 2. Activity launch is handled by AlarmService.onStartCommand — no need to
-        //    duplicate it here.  The service's watchdog will also relaunch the screen
-        //    if it doesn't appear within a few seconds.
+        // 2. Receiver launch is intentional: the alarm PendingIntent was delivered by the system.
+        try {
+            val activityIntent = Intent(context, AlarmActivity::class.java).apply {
+                putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                )
+            }
+            context.startActivity(activityIntent)
+            Log.d(TAG, "AlarmActivity launched directly from AlarmReceiver")
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct AlarmActivity launch from receiver failed; service watchdog will retry", e)
+        }
 
         // 3. Reschedule if repeating, or disable if one-shot
         val pendingResult = goAsync()

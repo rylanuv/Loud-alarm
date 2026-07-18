@@ -153,6 +153,14 @@ fun AlarmReliabilityScreen(
                     onActionClick = { context.openNotificationSettings() }
                 )
 
+                StepCard(
+                    step = "4",
+                    title = "Full-screen alarms",
+                    body = "Allow alarms to open over the lock screen instead of staying as a notification.",
+                    actionLabel = "Open full-screen settings",
+                    onActionClick = { context.openFullScreenAlarmSettings() }
+                )
+
                 BrandGrid(
                     onBrandTap = { brand ->
                         if (brand == "Huawei") {
@@ -689,6 +697,32 @@ private fun Context.openAutoStartSettings() {
 private fun Context.openNotificationSettings() {
     val packageUri = Uri.parse("package:$packageName")
     val intents = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            add(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                }
+            )
+        }
+        add(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = packageUri
+            }
+        )
+    }
+    launchFirstAvailable(intents)
+}
+
+private fun Context.openFullScreenAlarmSettings() {
+    val packageUri = Uri.parse("package:$packageName")
+    val intents = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            add(
+                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                    data = packageUri
+                }
+            )
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             add(
                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {

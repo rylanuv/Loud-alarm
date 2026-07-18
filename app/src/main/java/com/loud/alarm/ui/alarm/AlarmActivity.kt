@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -114,9 +115,10 @@ class AlarmActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val isPreview = intent.getBooleanExtra(EXTRA_PREVIEW_MODE, false)
-        if (!isPreview) showOnLockScreen()
+        if (!isPreview) configureAlarmWindow()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (!isPreview) configureAlarmWindow()
 
         if (isPreview) {
             val startPreviewIntent = Intent(this, AlarmService::class.java).apply {
@@ -257,7 +259,7 @@ class AlarmActivity : ComponentActivity() {
             }
         }
 
-        hideSystemUI()
+        if (!isPreview) hideSystemUI()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -273,6 +275,16 @@ class AlarmActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         isAlarmScreenVisible = true
+        if (!intent.getBooleanExtra(EXTRA_PREVIEW_MODE, false)) {
+            configureAlarmWindow()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!intent.getBooleanExtra(EXTRA_PREVIEW_MODE, false)) {
+            configureAlarmWindow()
+        }
     }
 
     override fun onStop() {
@@ -280,23 +292,26 @@ class AlarmActivity : ComponentActivity() {
         isAlarmScreenVisible = false
     }
 
+    private fun configureAlarmWindow() {
+        showOnLockScreen()
+        hideSystemUI()
+    }
+
     private fun showOnLockScreen() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                         or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                        or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
             )
         }
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                     or WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+                    or WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
     }
 
@@ -386,6 +401,7 @@ class AlarmActivity : ComponentActivity() {
 
     private fun hideSystemUI() {
         try {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 window.insetsController?.let { controller ->
                     controller.hide(android.view.WindowInsets.Type.systemBars())

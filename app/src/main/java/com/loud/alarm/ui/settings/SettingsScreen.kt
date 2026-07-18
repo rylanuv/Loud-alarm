@@ -97,6 +97,7 @@ fun SettingsScreen(
     val autoSilenceDuration by viewModel.autoSilenceDuration.collectAsState()
     val upcomingAlarmNotification by viewModel.upcomingAlarmNotificationEnabled.collectAsState()
     val preventUninstallEnabled by viewModel.preventUninstallEnabled.collectAsState()
+    val preventLastMinuteEditsEnabled by viewModel.preventLastMinuteEditsEnabled.collectAsState()
     
     var showFadeInWarningDialog by remember { mutableStateOf(false) }
     val vibrationPatternName by viewModel.vibrationPattern.collectAsState()
@@ -104,42 +105,6 @@ fun SettingsScreen(
     var showVibrationPatternDialog by remember { mutableStateOf(false) }
     val isPremium by viewModel.isPremium.collectAsState()
     val context = LocalContext.current
-
-    // Device Admin setup for Prevent Uninstall
-    val devicePolicyManager = remember {
-        context.getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-    }
-    val adminComponent = remember {
-        ComponentName(context, com.loud.alarm.service.LoudAlarmDeviceAdminReceiver::class.java)
-    }
-    val isDeviceAdmin = remember(preventUninstallEnabled) {
-        devicePolicyManager.isAdminActive(adminComponent)
-    }
-
-    // Sync preference with actual device admin status on resume
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                val currentlyAdmin = devicePolicyManager.isAdminActive(adminComponent)
-                if (preventUninstallEnabled != currentlyAdmin) {
-                    viewModel.setPreventUninstallEnabled(currentlyAdmin)
-                }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    // Launcher for Device Admin activation
-    val deviceAdminLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            viewModel.setPreventUninstallEnabled(true)
-        }
-        // If user cancelled, preference stays false
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.foundation.Image(
@@ -233,39 +198,45 @@ fun SettingsScreen(
                         SettingToggleItem(
                             icon = Icons.Default.Notifications,
                             title = "Upcoming Alarm Alert",
-                            subtitle = "Show notification 30 min before alarm",
+                            subtitle = "Show upcoming alarm alert in notifications",
                             checked = upcomingAlarmNotification,
                             onCheckedChange = { viewModel.setUpcomingAlarmNotificationEnabled(it) }
+                        )
+                    }
+                }
+            }
+
+            item {
+                SectionHeader(title = "Cheating Prevention")
+            }
+
+            item {
+                SettingsCard {
+                    Column {
+                        // Prevent Uninstall Toggle
+                        SettingToggleItem(
+                            icon = Icons.Default.Lock,
+                            title = "Prevent App Uninstall",
+                            subtitle = "Prevent app uninstallation when alarm is ringing",
+                            checked = preventUninstallEnabled,
+                            enabled = !com.loud.alarm.service.AlarmService.isRinging,
+                            onCheckedChange = { enabled ->
+                                viewModel.setPreventUninstallEnabled(enabled)
+                            }
                         )
 
                         SettingDivider()
 
-                        // Prevent Uninstall Toggle
+                        // Prevent Last Minute Edits Toggle
                         SettingToggleItem(
                             icon = Icons.Default.Lock,
-                            title = "Prevent Uninstall",
-                            subtitle = if (preventUninstallEnabled) "App cannot be uninstalled" else "Allow app uninstallation",
-                            checked = preventUninstallEnabled,
+                            title = "Prevent Last Minute Edits",
+                            subtitle = "Block edits 30 mins before alarm rings",
+                            checked = preventLastMinuteEditsEnabled,
                             onCheckedChange = { enabled ->
-                                if (enabled) {
-                                    // Request Device Admin activation
-                                    val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                                        putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
-                                        putExtra(
-                                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                                            "Loud Alarm needs Device Administrator access to prevent uninstallation while alarms are active."
-                                        )
-                                    }
-                                    deviceAdminLauncher.launch(intent)
-                                } else {
-                                    // Remove Device Admin and update preference
-                                    devicePolicyManager.removeActiveAdmin(adminComponent)
-                                    viewModel.setPreventUninstallEnabled(false)
-                                }
+                                viewModel.setPreventLastMinuteEditsEnabled(enabled)
                             }
                         )
-
-                        
                     }
                 }
             }
@@ -651,6 +622,7 @@ fun SettingToggleItem(
     title: String,
     subtitle: String,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -665,25 +637,33 @@ fun SettingToggleItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White,
+                color = if (enabled) Color.White else Color.White.copy(alpha = 0.5f),
                 fontWeight = FontWeight.SemiBold
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f)
+                color = if (enabled) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.4f)
             )
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            enabled = enabled,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color(0xFF151312),
                 checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.95f),
                 checkedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
                 uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
                 uncheckedTrackColor = Color.White.copy(alpha = 0.12f),
-                uncheckedBorderColor = Color.White.copy(alpha = 0.28f)
+                uncheckedBorderColor = Color.White.copy(alpha = 0.28f),
+                disabledCheckedThumbColor = Color(0xFF151312).copy(alpha = 0.5f),
+                disabledCheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                disabledCheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                disabledUncheckedThumbColor = Color.White.copy(alpha = 0.5f),
+                disabledUncheckedTrackColor = Color.White.copy(alpha = 0.06f),
+                disabledUncheckedBorderColor = Color.White.copy(alpha = 0.14f)
             )
         )
     }
@@ -713,6 +693,7 @@ fun SettingSliderItem(
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -759,6 +740,7 @@ fun SettingClickableItem(
                 fontWeight = FontWeight.SemiBold
             )
             if (!subtitle.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,

@@ -10,12 +10,14 @@ import com.loud.alarm.data.AlarmRepository
 import com.loud.alarm.review.InAppReviewManager
 import com.loud.alarm.share.SharePromptManager
 import com.loud.alarm.service.AlarmScheduler
+import com.loud.alarm.data.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDateTime
@@ -30,7 +32,8 @@ class HomeViewModel @Inject constructor(
     private val scheduler: AlarmScheduler,
     private val reviewManager: InAppReviewManager,
     private val sharePromptManager: SharePromptManager,
-    private val analyticsLogger: AnalyticsLogger
+    private val analyticsLogger: AnalyticsLogger,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     val alarms: StateFlow<List<Alarm>> = repository.allAlarms
@@ -83,6 +86,20 @@ class HomeViewModel @Inject constructor(
                 challengeTypes = alarm.analyticsChallengeTypes(),
                 isRepeating = alarm.daysOfWeek.isNotEmpty()
             )
+        }
+    }
+
+    fun handleAlarmAction(alarm: Alarm, action: () -> Unit, onBlocked: () -> Unit) {
+        viewModelScope.launch {
+            val preventEdits = settingsRepository.preventLastMinuteEditsEnabled.first()
+            if (preventEdits && alarm.enabled) {
+                val timeUntil = calculateTimeUntilNext(alarm)
+                if (timeUntil in 0 until 30 * 60 * 1000L) {
+                    onBlocked()
+                    return@launch
+                }
+            }
+            action()
         }
     }
 

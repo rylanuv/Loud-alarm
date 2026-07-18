@@ -5,6 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.admin.DevicePolicyManager
+import android.app.ActivityOptions
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -278,6 +281,9 @@ class AlarmService : Service() {
         restartScheduled = false
         Log.d(TAG, "AlarmService started for alarm: ${ringingContext.alarmId}")
 
+        // Activate Device Admin to prevent uninstall while ringing (if setting enabled)
+        activateDeviceAdminIfNeeded()
+
         acquireWakeLock()
         try {
             if (Build.VERSION.SDK_INT >= 34) {
@@ -416,6 +422,12 @@ class AlarmService : Service() {
             openAlarmIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            this,
+            alarmId + 10_000,
+            openAlarmIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -425,7 +437,7 @@ class AlarmService : Service() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(openAlarmPendingIntent)
-            .setFullScreenIntent(openAlarmPendingIntent, true)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
             .setOngoing(true)
             .setAutoCancel(false)
             .build()
@@ -696,7 +708,13 @@ class AlarmService : Service() {
                     activityIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                launchPendingIntent.send()
+                if (Build.VERSION.SDK_INT >= 34) {
+                    val options = ActivityOptions.makeBasic()
+                    options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                    launchPendingIntent.send(null, 0, null, null, null, null, options.toBundle())
+                } else {
+                    launchPendingIntent.send()
+                }
                 Log.d(TAG, "AlarmActivity launched from service via PendingIntent")
             } catch (pendingError: Exception) {
                 Log.e(TAG, "Failed to launch AlarmActivity via PendingIntent fallback", pendingError)
@@ -759,6 +777,10 @@ class AlarmService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // Deactivate Device Admin so app can be uninstalled when alarm is not ringing
+        deactivateDeviceAdmin()
+
         activeInstance = null
         isRinging = false
         Log.d(TAG, "AlarmService onDestroy: cleaning up resources")
@@ -789,5 +811,46 @@ class AlarmService : Service() {
 
         currentAlarmId = -1
         currentVolumeBoostEnabled = false
+    }
+
+    /**
+     * If the "Prevent Uninstall" preference is enabled, activate Device Admin
+     * so the app cannot be uninstalled while the alarm is ringing.
+     */
+    private fun activateDeviceAdminIfNeeded() {
+        try {
+            val isPreventUninstallEnabled = kotlinx.coroutines.runBlocking {
+                settingsRepository.preventUninstallEnabled.first()
+            }
+            if (!isPreventUninstallEnabled) return
+
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, LoudAlarmDeviceAdminReceiver::class.java)
+            if (!dpm.isAdminActive(adminComponent)) {
+                // Device Admin was not pre-approved — we can't force-activate it at runtime.
+                // The user must have granted it previously via Settings.
+                Log.w(TAG, "Prevent Uninstall enabled but Device Admin not active; cannot activate at runtime")
+            } else {
+                Log.d(TAG, "Device Admin already active — uninstall prevention in effect")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check/activate Device Admin", e)
+        }
+    }
+
+    /**
+     * Remove Device Admin so the app can be uninstalled after the alarm stops.
+     */
+    private fun deactivateDeviceAdmin() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, LoudAlarmDeviceAdminReceiver::class.java)
+            if (dpm.isAdminActive(adminComponent)) {
+                dpm.removeActiveAdmin(adminComponent)
+                Log.d(TAG, "Device Admin deactivated — app can be uninstalled")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to deactivate Device Admin", e)
+        }
     }
 }

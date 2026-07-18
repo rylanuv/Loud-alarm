@@ -70,6 +70,9 @@ class SettingsViewModel @Inject constructor(
     val upcomingAlarmNotificationEnabled: StateFlow<Boolean> = settingsRepository.upcomingAlarmNotificationEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val preventLastMinuteEditsEnabled: StateFlow<Boolean> = settingsRepository.preventLastMinuteEditsEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
 
     fun setVibrationEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -154,6 +157,12 @@ class SettingsViewModel @Inject constructor(
     fun setUpcomingAlarmNotificationEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setUpcomingAlarmNotificationEnabled(enabled)
+        }
+    }
+
+    fun setPreventLastMinuteEditsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setPreventLastMinuteEditsEnabled(enabled)
         }
     }
 

@@ -53,7 +53,7 @@
         <activity
             android:name=".ui.alarm.AlarmActivity"
             android:exported="false"
-            android:theme="@style/Theme.LoudAlarm"
+            android:theme="@style/Theme.LoudAlarm.Alarm"
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
             android:showWhenLocked="true"

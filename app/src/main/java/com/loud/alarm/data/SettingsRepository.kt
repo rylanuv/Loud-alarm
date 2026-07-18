@@ -44,6 +44,7 @@ class SettingsRepository @Inject constructor(
         val PREVENT_UNINSTALL_ENABLED = booleanPreferencesKey("prevent_uninstall_enabled")
         val LAST_SHARE_PROMPT_TIME = longPreferencesKey("last_share_prompt_time")
         val UPCOMING_ALARM_NOTIFICATION = booleanPreferencesKey("upcoming_alarm_notification")
+        val PREVENT_LAST_MINUTE_EDITS_ENABLED = booleanPreferencesKey("prevent_last_minute_edits_enabled")
     }
 
     val vibrationEnabled: Flow<Boolean> = context.dataStore.data
@@ -119,6 +120,11 @@ class SettingsRepository @Inject constructor(
     val upcomingAlarmNotificationEnabled: Flow<Boolean> = context.dataStore.data
         .map { preferences: Preferences ->
             preferences[PreferencesKeys.UPCOMING_ALARM_NOTIFICATION] ?: false
+        }
+
+    val preventLastMinuteEditsEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences: Preferences ->
+            preferences[PreferencesKeys.PREVENT_LAST_MINUTE_EDITS_ENABLED] ?: false
         }
 
     suspend fun setVibrationEnabled(enabled: Boolean) {
@@ -208,6 +214,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setUpcomingAlarmNotificationEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences: MutablePreferences ->
             preferences[PreferencesKeys.UPCOMING_ALARM_NOTIFICATION] = enabled
+        }
+    }
+
+    suspend fun setPreventLastMinuteEditsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences: MutablePreferences ->
+            preferences[PreferencesKeys.PREVENT_LAST_MINUTE_EDITS_ENABLED] = enabled
         }
     }
 
