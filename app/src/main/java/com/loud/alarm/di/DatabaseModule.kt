@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.loud.alarm.data.AlarmDao
 import com.loud.alarm.data.AlarmDatabase
+import com.loud.alarm.data.AlarmSessionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -220,6 +221,37 @@ object DatabaseModule {
                 db.execSQL("ALTER TABLE alarms ADD COLUMN roomLightTargetLux INTEGER NOT NULL DEFAULT 100")
             }
         }
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN advancedMathTopics TEXT NOT NULL DEFAULT 'POLYNOMIAL'")
+                db.execSQL("ALTER TABLE alarms ADD COLUMN advancedMathQuestionCount INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `alarm_sessions` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                        `alarmId` INTEGER NOT NULL, 
+                        `ringStartTime` INTEGER NOT NULL, 
+                        `dismissTime` INTEGER NOT NULL, 
+                        `snoozeCount` INTEGER NOT NULL, 
+                        `date` INTEGER NOT NULL, 
+                        `timeToWakeSeconds` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+        val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN advancedMathDifficulty TEXT NOT NULL DEFAULT 'EASY'")
+            }
+        }
+        val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarms ADD COLUMN advancedMathMuteWhileSolving INTEGER NOT NULL DEFAULT 0")
+            }
+        }
         return Room.databaseBuilder(
             context,
             AlarmDatabase::class.java,
@@ -249,7 +281,11 @@ object DatabaseModule {
             MIGRATION_21_22,
             MIGRATION_22_23,
             MIGRATION_23_24,
-            MIGRATION_24_25
+            MIGRATION_24_25,
+            MIGRATION_25_26,
+            MIGRATION_26_27,
+            MIGRATION_27_28,
+            MIGRATION_28_29
         )
         .build()
     }
@@ -257,5 +293,10 @@ object DatabaseModule {
     @Provides
     fun provideAlarmDao(database: AlarmDatabase): AlarmDao {
         return database.alarmDao()
+    }
+
+    @Provides
+    fun provideAlarmSessionDao(database: AlarmDatabase): AlarmSessionDao {
+        return database.alarmSessionDao()
     }
 }

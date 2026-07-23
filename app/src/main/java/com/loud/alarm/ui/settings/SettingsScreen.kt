@@ -31,6 +31,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.AlarmOn
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.EditOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -184,7 +188,7 @@ fun SettingsScreen(
                         
                         // Auto Silence Slider
                         SettingSliderItem(
-                            icon = Icons.Default.Notifications,
+                            icon = Icons.Default.VolumeOff,
                             title = "Auto Silence",
                             subtitle = "Stop ringing after ${autoSilenceDuration} minutes",
                             value = autoSilenceDuration.toFloat(),
@@ -196,7 +200,7 @@ fun SettingsScreen(
 
                         // Upcoming Alarm Notification
                         SettingToggleItem(
-                            icon = Icons.Default.Notifications,
+                            icon = Icons.Default.AlarmOn,
                             title = "Upcoming Alarm Alert",
                             subtitle = "Show upcoming alarm alert in notifications",
                             checked = upcomingAlarmNotification,
@@ -215,7 +219,7 @@ fun SettingsScreen(
                     Column {
                         // Prevent Uninstall Toggle
                         SettingToggleItem(
-                            icon = Icons.Default.Lock,
+                            icon = Icons.Default.Security,
                             title = "Prevent App Uninstall",
                             subtitle = "Prevent app uninstallation when alarm is ringing",
                             checked = preventUninstallEnabled,
@@ -229,9 +233,9 @@ fun SettingsScreen(
 
                         // Prevent Last Minute Edits Toggle
                         SettingToggleItem(
-                            icon = Icons.Default.Lock,
+                            icon = Icons.Default.EditOff,
                             title = "Prevent Last Minute Edits",
-                            subtitle = "Block edits 30 mins before alarm rings",
+                            subtitle = "Block edits before alarm rings",
                             checked = preventLastMinuteEditsEnabled,
                             onCheckedChange = { enabled ->
                                 viewModel.setPreventLastMinuteEditsEnabled(enabled)
@@ -239,6 +243,18 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+
+            item {
+                SectionHeader(title = "Pro")
+            }
+            
+            item {
+                PremiumSubscriptionCard(
+                    isPremium = isPremium,
+                    onClick = onNavigateToSubscription,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
             }
 
             // Sound Settings Section
@@ -279,14 +295,6 @@ fun SettingsScreen(
                         }
                     }
                 }
-            }
-
-            item {
-                PremiumSubscriptionCard(
-                    isPremium = isPremium,
-                    onClick = onNavigateToSubscription,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
             }
 
             // Troubleshooting Section

@@ -3,9 +3,11 @@ package com.loud.alarm.ui.home
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,12 +25,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -86,6 +91,7 @@ fun HomeScreen(
     onNavigateToEditor: (Int?) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToPermissionSetup: () -> Unit,
+    onNavigateToStatistics: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val alarms by viewModel.alarms.collectAsState()
@@ -187,6 +193,17 @@ fun HomeScreen(
                 TopAppBar(
                     title = { },
                     actions = {
+                        IconButton(
+                            onClick = onNavigateToStatistics,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.DateRange,
+                                contentDescription = "Statistics",
+                                tint = Color.White.copy(alpha = 0.4f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                         IconButton(onClick = onNavigateToSettings) {
                             Icon(
                                 Icons.Default.Settings,
@@ -494,21 +511,52 @@ fun SwipeableAlarmItem(
             }
         },
         content = {
-            AlarmItemContent(alarm, onToggle, onClick)
+            AlarmItemContent(alarm, onToggle, onClick, onDelete)
         }
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlarmItemContent(
     alarm: Alarm,
     onToggle: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete Alarm") },
+            text = { Text("Are you sure you want to delete this alarm?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete()
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { showMenu = true }
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.Transparent
@@ -533,6 +581,25 @@ fun AlarmItemContent(
                 )
                 .clip(RoundedCornerShape(16.dp))
         ) {
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit Alarm") },
+                    onClick = { 
+                        showMenu = false
+                        onClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete Alarm", color = MaterialTheme.colorScheme.error) },
+                    onClick = {
+                        showMenu = false
+                        showDeleteConfirmation = true
+                    }
+                )
+            }
             Row(
                 modifier = Modifier
                     .padding(16.dp)

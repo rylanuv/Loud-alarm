@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.loud.alarm.analytics.AnalyticsLogger
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.AlarmRepository
+import com.loud.alarm.data.AlarmSessionTracker
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.SettingsRepository
+import com.loud.alarm.data.StatisticsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +26,9 @@ class AlarmActiveViewModel @Inject constructor(
     private val scheduler: com.loud.alarm.service.AlarmScheduler,
     private val settingsRepository: SettingsRepository,
     private val analyticsLogger: AnalyticsLogger,
-    private val billingManager: com.loud.alarm.billing.BillingManager
+    private val billingManager: com.loud.alarm.billing.BillingManager,
+    private val statisticsRepository: StatisticsRepository,
+    private val sessionTracker: AlarmSessionTracker
 ) : ViewModel() {
     companion object {
         private const val TAG = "AlarmActiveViewModel"
@@ -51,6 +55,7 @@ class AlarmActiveViewModel @Inject constructor(
                     _loadError.value = "Alarm not found"
                 } else {
                     _alarm.value = loaded
+                    sessionTracker.startOrGetSession(id)
                     analyticsLogger.logAlarmTriggered(
                         challengeCount = loaded.analyticsChallengeCount(),
                         challengeTypes = loaded.analyticsChallengeTypes(),
@@ -71,6 +76,7 @@ class AlarmActiveViewModel @Inject constructor(
             // Schedule the same alarm to fire again after the snooze duration.
             // No new alarm is created — we just re-schedule the existing one.
             scheduler.scheduleSnooze(alarm, minutes)
+            sessionTracker.recordSnooze()
             analyticsLogger.logAlarmSnoozed(
                 minutes = minutes,
                 challengeCount = alarm.analyticsChallengeCount(),
@@ -81,6 +87,17 @@ class AlarmActiveViewModel @Inject constructor(
     }
 
     fun logAlarmDismissed(alarm: Alarm) {
+        viewModelScope.launch {
+            val sessionData = sessionTracker.getSessionData()
+            statisticsRepository.recordSession(
+                alarmId = alarm.id,
+                ringStartTime = sessionData.ringStartTime,
+                dismissTime = System.currentTimeMillis(),
+                snoozeCount = sessionData.snoozeCount
+            )
+            sessionTracker.clearSession()
+        }
+        
         analyticsLogger.logAlarmDismissed(
             challengeCount = alarm.analyticsChallengeCount(),
             challengeTypes = alarm.analyticsChallengeTypes(),

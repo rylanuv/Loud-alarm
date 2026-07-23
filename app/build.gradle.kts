@@ -12,12 +12,12 @@ if (file("google-services.json").exists()) {
 
 android {
     namespace = "com.loud.alarm"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.loud.alarm"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 24
         versionName = "1.8"
 

@@ -72,10 +72,12 @@ import androidx.compose.ui.unit.sp
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.MathDifficulty
+import com.loud.alarm.data.AdvancedMathTopic
 import com.loud.alarm.data.SquatDetectionMode
 import com.loud.alarm.service.AlarmService
 import com.loud.alarm.ui.challenge.QrCodeChallengeScreen
 import com.loud.alarm.ui.challenge.MathChallengeScreen
+import com.loud.alarm.ui.challenge.AdvancedMathChallengeScreen
 import com.loud.alarm.ui.challenge.PuzzleChallengeScreen
 import com.loud.alarm.ui.challenge.ScanChallengeScreen
 import com.loud.alarm.ui.challenge.ShakeChallengeScreen
@@ -157,7 +159,15 @@ class AlarmActivity : ComponentActivity() {
                 audioMemoryDifficulty = MathDifficulty.valueOf(intent.getStringExtra("audioMemoryDifficulty") ?: "EASY"),
                 audioMemoryChallengeCount = intent.getIntExtra("audioMemoryChallengeCount", 1),
                 clockReadingDifficulty = MathDifficulty.valueOf(intent.getStringExtra("clockReadingDifficulty") ?: "EASY"),
-                clockReadingCount = intent.getIntExtra("clockReadingCount", 1)
+                clockReadingCount = intent.getIntExtra("clockReadingCount", 1),
+                advancedMathTopics = intent.getStringArrayListExtra("advancedMathTopics")
+                    ?.mapNotNull { name ->
+                        try { AdvancedMathTopic.valueOf(name) } catch (_: Exception) { null }
+                    }?.toSet()?.ifEmpty { setOf(AdvancedMathTopic.POLYNOMIAL) }
+                    ?: setOf(AdvancedMathTopic.POLYNOMIAL),
+                advancedMathDifficulty = MathDifficulty.valueOf(intent.getStringExtra("advancedMathDifficulty") ?: "EASY"),
+                advancedMathQuestionCount = intent.getIntExtra("advancedMathQuestionCount", 1),
+                advancedMathMuteWhileSolving = intent.getBooleanExtra("advancedMathMuteWhileSolving", false)
             )
             setContent {
                 LoudAlarmTheme(darkTheme = true) {
@@ -170,7 +180,7 @@ class AlarmActivity : ComponentActivity() {
                             onStopAlarmSound = {
                                 stopAlarmService()
                             },
-                            onDismissActivity = { 
+                            onDismissActivity = { _ ->
                                 stopAlarmService()
                                 finish() 
                             }
@@ -206,7 +216,7 @@ class AlarmActivity : ComponentActivity() {
                             onStopAlarmSound = {
                                 stopAlarmService()
                             },
-                            onDismissActivity = {
+                            onDismissActivity = { redirectToStats ->
                                 alarmFlowCompleted = true
                                 viewModel.logAlarmDismissed(alarmState!!)
                                 lifecycleScope.launch {
@@ -216,6 +226,14 @@ class AlarmActivity : ComponentActivity() {
                                     scheduleWakeUpCheck(alarmState!!)
                                 }
                                 stopAlarmService()
+                                
+                                if (redirectToStats) {
+                                    val mainIntent = Intent(this@AlarmActivity, com.loud.alarm.MainActivity::class.java).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                    }
+                                    startActivity(mainIntent)
+                                }
+                                
                                 finish()
                             }
                         )
@@ -444,13 +462,14 @@ fun ActiveAlarmScreen(
     viewModel: AlarmActiveViewModel,
     isPreview: Boolean = false,
     onStopAlarmSound: () -> Unit = {},
-    onDismissActivity: () -> Unit
+    onDismissActivity: (redirectToStats: Boolean) -> Unit
 ) {
     Log.d("ActiveAlarmScreen", "=== RENDERING === alarm.id=${alarm.id}, challengeTypes=${alarm.challengeTypes}")
 
     // Key state to this specific alarm so recomposition doesn't mix up states
     key(alarm.id) {
         var mathSolved by rememberSaveable { mutableStateOf(false) }
+        var advancedMathSolved by rememberSaveable { mutableStateOf(false) }
         var barcodeScanned by rememberSaveable { mutableStateOf(false) }
         var useScanSinkMathFallback by rememberSaveable { mutableStateOf(false) }
         var useScanObjectMathFallback by rememberSaveable { mutableStateOf(false) }
@@ -489,6 +508,7 @@ fun ActiveAlarmScreen(
         val isChallengeComplete = activeChallenges.isEmpty() || activeChallenges.all { type ->
             when (type) {
                 ChallengeType.MATH -> mathSolved
+                ChallengeType.ADVANCED_MATH -> advancedMathSolved
                 ChallengeType.QR_CODE -> barcodeScanned
                 ChallengeType.REWRITE -> rewriteSolved
                 ChallengeType.STEP -> stepSolved
@@ -515,6 +535,7 @@ fun ActiveAlarmScreen(
         val currentChallenge = activeChallenges.firstOrNull { type ->
             when (type) {
                 ChallengeType.MATH -> !mathSolved
+                ChallengeType.ADVANCED_MATH -> !advancedMathSolved
                 ChallengeType.QR_CODE -> !barcodeScanned
                 ChallengeType.REWRITE -> !rewriteSolved
                 ChallengeType.STEP -> !stepSolved
@@ -543,12 +564,12 @@ fun ActiveAlarmScreen(
             if (isRingingScreenDismissed && isChallengeComplete) {
                 if (pendingSnoozeMinutes != null) {
                     viewModel.snoozeAlarm(alarm, pendingSnoozeMinutes!!)
-                    onDismissActivity()
+                    onDismissActivity(false)
                 } else if (activeChallenges.isNotEmpty()) {
                     onStopAlarmSound()
                     showCongrats = true
                 } else {
-                    onDismissActivity()
+                    onDismissActivity(!isPreview)
                 }
             }
         }
@@ -561,7 +582,7 @@ fun ActiveAlarmScreen(
                     if (alarmDismissCount == 4 && !isSubscribed && !isPreview) {
                         showUpgradePrompt = true
                     } else {
-                        onDismissActivity()
+                        onDismissActivity(!isPreview)
                     }
                 }
             )
@@ -573,10 +594,10 @@ fun ActiveAlarmScreen(
                         putExtra("OPEN_SUBSCRIPTION", true)
                     }
                     context.startActivity(intent)
-                    onDismissActivity()
+                    onDismissActivity(false)
                 },
                 onDismiss = {
-                    onDismissActivity()
+                    onDismissActivity(!isPreview)
                 }
             )
         } else if (!isRingingScreenDismissed) {
@@ -623,7 +644,7 @@ fun ActiveAlarmScreen(
                         )
                         if (isPreview) {
                             OutlinedButton(
-                                onClick = onDismissActivity,
+                                onClick = { onDismissActivity(false) },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                             ) { Text("Close") }
                         }
@@ -640,6 +661,26 @@ fun ActiveAlarmScreen(
                                 onSuccess = {
                                     Log.d("ActiveAlarmScreen", "Math challenge SOLVED!")
                                     mathSolved = true
+                                }
+                            )
+                        }
+                        ChallengeType.ADVANCED_MATH -> {
+                            Log.d("ActiveAlarmScreen", "Rendering AdvancedMathChallengeScreen")
+                            AdvancedMathChallengeScreen(
+                                topics = alarm.advancedMathTopics,
+                                difficulty = alarm.advancedMathDifficulty,
+                                questionCount = alarm.advancedMathQuestionCount,
+                                muteWhileSolving = alarm.advancedMathMuteWhileSolving,
+                                onMuteChanged = { muted ->
+                                    if (muted) {
+                                        AlarmService.muteAlarmVolume()
+                                    } else {
+                                        AlarmService.unmuteAlarmVolume()
+                                    }
+                                },
+                                onSuccess = {
+                                    Log.d("ActiveAlarmScreen", "Advanced Math challenge SOLVED!")
+                                    advancedMathSolved = true
                                 }
                             )
                         }

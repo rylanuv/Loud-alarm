@@ -549,6 +549,11 @@ fun getChallengePreviewInfo(type: ChallengeType): Pair<String, List<String>> {
             "Addition, multiplication, algebra",
             "Configurable question count"
         )
+        ChallengeType.ADVANCED_MATH -> "Solve advanced math problems to dismiss." to listOf(
+            "Polynomials, Matrix, Calculus...",
+            "Decimals and negative numbers",
+            "Configurable question count"
+        )
         ChallengeType.QR_CODE -> "Scan a QR or barcode to dismiss." to listOf(
             "Scan any QR code or a specific one",
             "Forces you to get up and find it",
@@ -592,6 +597,12 @@ fun getChallengeSettingsSummary(type: ChallengeType, uiState: AlarmUiState): Str
             val q = uiState.mathQuestionCount
             "$d · ${q}Q"
         }
+        ChallengeType.ADVANCED_MATH -> {
+            val d = uiState.advancedMathDifficulty.name.lowercase().replaceFirstChar { it.uppercase() }
+            val q = uiState.advancedMathQuestionCount
+            val t = uiState.advancedMathTopics.size
+            "$d · $t topics · ${q}Q"
+        }
         ChallengeType.MAZE -> uiState.mazeDifficulty.name.lowercase().replaceFirstChar { it.uppercase() }
         ChallengeType.PUZZLE -> uiState.puzzleDifficulty.name.lowercase().replaceFirstChar { it.uppercase() }
         ChallengeType.MEMORY -> {
@@ -633,6 +644,7 @@ fun getChallengeTileSubtitle(type: ChallengeType): String {
     return when (type) {
         ChallengeType.NONE -> "Dismiss normally"
         ChallengeType.MATH -> "Solve sums"
+        ChallengeType.ADVANCED_MATH -> "For Maths Lovers"
         ChallengeType.QR_CODE -> "Scan code"
         ChallengeType.REWRITE -> "Type phrase"
         ChallengeType.TAP_CHALLENGE -> "Tap target"

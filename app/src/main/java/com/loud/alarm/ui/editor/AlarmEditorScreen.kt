@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Vibration
@@ -65,6 +66,14 @@ import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Architecture
+import androidx.compose.material.icons.filled.SquareFoot
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.LinearScale
 import androidx.compose.material.icons.filled.Hotel
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -112,6 +121,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -168,6 +178,8 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.loud.alarm.billing.BillingViewModel
+import com.loud.alarm.data.AdvancedMathTopic
+import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.ChallengeType
 import com.loud.alarm.data.MathDifficulty
 import com.loud.alarm.data.SquatDetectionMode
@@ -357,12 +369,23 @@ fun AlarmEditorScreen(
             
             // ──────────────────────────────────────────────────
             Spacer(modifier = Modifier.height(16.dp))
-            key(uiState.timePickerVersion) {
-                WheelTimePicker(
-                    hour = uiState.hour,
-                    minute = uiState.minute,
-                    onTimeChanged = { h, m -> viewModel.updateTime(h, m) }
-                )
+            if (uiState.isLoadingAlarm) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                key(uiState.timePickerVersion) {
+                    WheelTimePicker(
+                        hour = uiState.hour,
+                        minute = uiState.minute,
+                        onTimeChanged = { h, m -> viewModel.updateTime(h, m) }
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(48.dp))
@@ -572,6 +595,7 @@ fun AlarmEditorScreen(
                     val challengeOptions = listOf(
                         ChallengeType.NONE to Triple(Icons.Default.Bedtime, "None", IconBlue),
                         ChallengeType.MATH to Triple(Icons.Default.Calculate, "Maths", IconRed),
+                        ChallengeType.ADVANCED_MATH to Triple(Icons.Default.Functions, "Advanced Maths", IconRed),
                         ChallengeType.QR_CODE to Triple(Icons.Default.QrCodeScanner, "QR Code", IconPurple),
                         ChallengeType.REWRITE to Triple(Icons.Default.Edit, "Rewrite", IconYellow),
                         ChallengeType.TAP_CHALLENGE to Triple(Icons.Default.TouchApp, "Tap", IconGreen),
@@ -585,9 +609,9 @@ fun AlarmEditorScreen(
                         ChallengeType.SPELL_BEE to Triple(Icons.Default.Spellcheck, "Spell Bee", IconAmber),
                         ChallengeType.PUZZLE to Triple(Icons.Default.Extension, "Puzzle", IconIndigo),
                         ChallengeType.SCAN_SINK to Triple(Icons.Default.Wash, "Scan Sink", IconTeal),
-                        ChallengeType.SCAN_OBJECT to Triple(Icons.Default.CameraAlt, "Scan Object", IconLime),
-                        ChallengeType.SQUAT to Triple(SquatIcon, "Squat", IconDeepOrange),
                         ChallengeType.PUSH_UP to Triple(Icons.Default.FitnessCenter, "Push Up", IconDeepPurple),
+                        ChallengeType.SQUAT to Triple(SquatIcon, "Squat", IconDeepOrange),
+                        ChallengeType.SCAN_OBJECT to Triple(Icons.Default.CameraAlt, "Scan Object", IconLime),
                         ChallengeType.REVERSE_TYPING to Triple(Icons.Default.Keyboard, "Reverse Typing", IconBrown),
                         ChallengeType.AUDIO_MEMORY to Triple(Icons.Default.Headphones, "Audio Memory", IconLightBlue)
                     )
@@ -604,7 +628,8 @@ fun AlarmEditorScreen(
                         ChallengeType.PUSH_UP,
                         ChallengeType.REVERSE_TYPING,
                         ChallengeType.AUDIO_MEMORY,
-                        ChallengeType.ROOM_LIGHT
+                        ChallengeType.ROOM_LIGHT,
+                        ChallengeType.ADVANCED_MATH
                     )
                     var showSettingsForChallenge by remember { mutableStateOf<ChallengeType?>(null) }
                     var showPreviewForChallenge by remember { mutableStateOf<ChallengeType?>(null) }
@@ -903,6 +928,168 @@ fun AlarmEditorScreen(
                                             onSelect = { viewModel.updateMathQuestionCount(it) },
                                             suffix = "questions"
                                         )
+                                    }
+                                    ChallengeType.ADVANCED_MATH -> {
+                                        // Topic icon + info map using Material Design vector icons
+                                        val topicInfo = mapOf(
+                                            AdvancedMathTopic.POLYNOMIAL to Triple(Icons.Default.Functions, "Polynomial", "Roots & factoring"),
+                                            AdvancedMathTopic.GEOMETRY to Triple(Icons.Default.Architecture, "Geometry", "Area & volume"),
+                                            AdvancedMathTopic.TRIGONOMETRY to Triple(Icons.Default.SquareFoot, "Trigonometry", "sin, cos, tan"),
+                                            AdvancedMathTopic.CALCULUS to Triple(Icons.Default.Timeline, "Calculus", "Derivatives"),
+                                            AdvancedMathTopic.MATRIX to Triple(Icons.Default.GridOn, "Matrix", "Determinants"),
+                                            AdvancedMathTopic.LOGARITHM to Triple(Icons.Default.ShowChart, "Logarithm", "log & properties"),
+                                            AdvancedMathTopic.PROBABILITY to Triple(Icons.Default.Casino, "Probability", "Combos & perms"),
+                                            AdvancedMathTopic.SEQUENCE to Triple(Icons.Default.LinearScale, "Sequence", "AP, GP, sums")
+                                        )
+
+                                        Text(
+                                            text = "Select Topics",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                        // 2-column grid layout for compact display
+                                        val topicEntries = AdvancedMathTopic.entries
+                                        val rows = topicEntries.chunked(2)
+                                        rows.forEach { rowTopics ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 3.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                rowTopics.forEach { topic ->
+                                                    val info = topicInfo[topic] ?: Triple(Icons.Default.Functions, topic.name, "")
+                                                    val isSelected = uiState.advancedMathTopics.contains(topic)
+                                                    val bgColor by animateColorAsState(
+                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                        else Color.White.copy(alpha = 0.05f), label = "topicBg_${topic.name}"
+                                                    )
+                                                    val borderColor by animateColorAsState(
+                                                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary
+                                                        else Color.White.copy(alpha = 0.1f), label = "topicBorder_${topic.name}"
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .clip(RoundedCornerShape(12.dp))
+                                                            .background(bgColor)
+                                                            .border(
+                                                                width = if (isSelected) 1.5.dp else 1.dp,
+                                                                color = borderColor,
+                                                                shape = RoundedCornerShape(12.dp)
+                                                            )
+                                                            .clickable { viewModel.toggleAdvancedMathTopic(topic) }
+                                                            .padding(horizontal = 10.dp, vertical = 10.dp)
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Icon(
+                                                                imageVector = info.first,
+                                                                contentDescription = info.second,
+                                                                tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(8.dp))
+                                                            Column(modifier = Modifier.weight(1f)) {
+                                                                Text(
+                                                                    text = info.second,
+                                                                    style = MaterialTheme.typography.labelMedium,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                                                    maxLines = 1
+                                                                )
+                                                                Text(
+                                                                    text = info.third,
+                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                                                    else Color.White.copy(alpha = 0.5f),
+                                                                    maxLines = 1,
+                                                                    fontSize = 10.sp
+                                                                )
+                                                            }
+                                                            if (isSelected) {
+                                                                Icon(
+                                                                    Icons.Default.CheckCircle,
+                                                                    contentDescription = null,
+                                                                    tint = MaterialTheme.colorScheme.primary,
+                                                                    modifier = Modifier.size(16.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                // Fill remaining space if odd number of items in last row
+                                                if (rowTopics.size == 1) {
+                                                    Spacer(modifier = Modifier.weight(1f))
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        DifficultySelector(
+                                            label = "Difficulty",
+                                            selected = uiState.advancedMathDifficulty,
+                                            onSelect = { viewModel.updateAdvancedMathDifficulty(it) },
+                                            descriptions = mapOf(
+                                                MathDifficulty.EASY to "Simple evaluations and basics",
+                                                MathDifficulty.MEDIUM to "Standard problems, roots & formulas",
+                                                MathDifficulty.HARD to "Multi-step and compound problems",
+                                                MathDifficulty.EXTREME to "Complex operations, chain rules"
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        CountChipRow(
+                                            label = "Number of Questions",
+                                            options = listOf(1, 2, 3, 5, 10),
+                                            selected = uiState.advancedMathQuestionCount,
+                                            onSelect = { viewModel.updateAdvancedMathQuestionCount(it) },
+                                            suffix = "questions"
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        // Mute while solving toggle
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(Color.White.copy(alpha = 0.05f))
+                                                .border(
+                                                    width = 1.dp,
+                                                    color = Color.White.copy(alpha = 0.1f),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.VolumeOff,
+                                                contentDescription = "Mute while solving",
+                                                tint = if (uiState.advancedMathMuteWhileSolving) MaterialTheme.colorScheme.primary
+                                                       else Color.White.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    "Mute While Solving",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                                Text(
+                                                    "Mute alarm for 4 min intervals",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color.White.copy(alpha = 0.6f)
+                                                )
+                                            }
+                                            Switch(
+                                                checked = uiState.advancedMathMuteWhileSolving,
+                                                onCheckedChange = { viewModel.updateAdvancedMathMuteWhileSolving(it) },
+                                                colors = SwitchDefaults.colors(
+                                                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                                    checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                                )
+                                            )
+                                        }
                                     }
                                     ChallengeType.MAZE -> {
                                         DifficultySelector(
@@ -1444,6 +1631,13 @@ fun AlarmEditorScreen(
                                 putExtra("audioMemoryChallengeCount", uiState.audioMemoryChallengeCount)
                                 putExtra("clockReadingDifficulty", uiState.clockReadingDifficulty.name)
                                 putExtra("clockReadingCount", uiState.clockReadingCount)
+                                putStringArrayListExtra(
+                                    "advancedMathTopics",
+                                    java.util.ArrayList(uiState.advancedMathTopics.map { it.name })
+                                )
+                                putExtra("advancedMathDifficulty", uiState.advancedMathDifficulty.name)
+                                putExtra("advancedMathQuestionCount", uiState.advancedMathQuestionCount)
+                                putExtra("advancedMathMuteWhileSolving", uiState.advancedMathMuteWhileSolving)
                             }
                             context.startActivity(previewIntent)
                             showPreviewForChallenge = null

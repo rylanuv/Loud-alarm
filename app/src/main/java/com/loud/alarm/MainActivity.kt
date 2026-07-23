@@ -99,19 +99,18 @@ fun AlarmNavigation(analyticsLogger: AnalyticsLogger, openSubscription: Boolean 
         }
     }
 
-    LaunchedEffect(openSubscription) {
-        if (openSubscription) {
-            navController.navigate("subscription")
-        }
-    }
-
     NavHost(navController = navController, startDestination = bootstrapRoute) {
         composable(bootstrapRoute) {
             LaunchedEffect(onboardingCompleted) {
                 when (onboardingCompleted) {
-                    true -> navController.navigate(homeRoute) {
-                        popUpTo(bootstrapRoute) { inclusive = true }
-                        launchSingleTop = true
+                    true -> {
+                        navController.navigate(homeRoute) {
+                            popUpTo(bootstrapRoute) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        if (openSubscription) {
+                            navController.navigate("subscription")
+                        }
                     }
                     false -> navController.navigate(onboardingRoute) {
                         popUpTo(bootstrapRoute) { inclusive = true }
@@ -157,6 +156,11 @@ fun AlarmNavigation(analyticsLogger: AnalyticsLogger, openSubscription: Boolean 
                     navController.navigate(permissionSetupRoute) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToStatistics = {
+                    navController.navigate("statistics") {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -192,6 +196,11 @@ fun AlarmNavigation(analyticsLogger: AnalyticsLogger, openSubscription: Boolean 
         composable("subscription") {
             SubscriptionScreen(
                 onBack = { navigateBackOrFallback() }
+            )
+        }
+        composable("statistics") {
+            com.loud.alarm.ui.statistics.StatisticsScreen(
+                onNavigateBack = { navigateBackOrFallback() }
             )
         }
     }

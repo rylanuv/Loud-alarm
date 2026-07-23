@@ -113,11 +113,6 @@ class AlarmService : Service() {
         /** Restore the alarm ringtone and TTS stream to original levels */
         fun restoreAlarmVolume() {
             activeInstance?.let { svc ->
-                svc.isVolumeDimmed = false
-                svc.mediaPlayer?.setVolume(1f, 1f)
-                if (svc.currentVolumeBoostEnabled) {
-                    svc.loudnessEnhancer?.enabled = true
-                }
                 // Restore TTS stream (MUSIC) to previous volume
                 if (savedMusicVolume >= 0) {
                     try {
@@ -129,13 +124,53 @@ class AlarmService : Service() {
                     }
                     savedMusicVolume = -1
                 }
+
+                if (svc.isMutedForSolving) {
+                    Log.d(TAG, "Skipping alarm volume restore because it is muted for solving")
+                    return
+                }
+
+                svc.isVolumeDimmed = false
+                svc.mediaPlayer?.setVolume(1f, 1f)
+                if (svc.currentVolumeBoostEnabled) {
+                    svc.loudnessEnhancer?.enabled = true
+                }
                 Log.d(TAG, "Alarm volume restored after TTS")
+            }
+        }
+
+        /** Fully mute alarm volume (for mute-while-solving feature) */
+        fun muteAlarmVolume() {
+            activeInstance?.let { svc ->
+                svc.fadeAnimator?.cancel()
+                svc.isMutedForSolving = true
+                svc.isVolumeDimmed = true
+                svc.mediaPlayer?.setVolume(0f, 0f)
+                svc.loudnessEnhancer?.enabled = false
+                svc.vibrator?.cancel()
+                Log.d(TAG, "Alarm volume fully muted for solving")
+            }
+        }
+
+        /** Restore alarm volume after mute-while-solving */
+        fun unmuteAlarmVolume() {
+            activeInstance?.let { svc ->
+                svc.isMutedForSolving = false
+                svc.isVolumeDimmed = false
+                svc.mediaPlayer?.setVolume(1f, 1f)
+                if (svc.currentVolumeBoostEnabled) {
+                    svc.loudnessEnhancer?.enabled = true
+                }
+                Log.d(TAG, "Alarm volume unmuted after solving")
             }
         }
     }
 
     /** When true, the volume enforcer skips re-cranking volume */
     private var isVolumeDimmed = false
+
+    /** When true, the alarm is explicitly muted by the user for solving; overrides TTS volume restores */
+    private var isMutedForSolving = false
 
     private val autoSilenceRunnable = Runnable {
         Log.w(TAG, "Auto-silencing alarm after timeout: user never dismissed")

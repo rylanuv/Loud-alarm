@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -155,7 +155,12 @@ fun MathChallengeScreen(
             // Keypad
             NumericKeypad(
                 onNumberClick = { num ->
-                    if (input.length < 6 && !isCorrect) {
+                    if (input.length < 10 && !isCorrect) {
+                        // Prevent multiple decimals
+                        if (num == "." && input.contains(".")) return@NumericKeypad
+                        // Prevent negative sign anywhere but the start
+                        if (num == "-" && input.isNotEmpty()) return@NumericKeypad
+                        
                         input += num
                         isError = false
                     }
@@ -197,7 +202,8 @@ fun NumericKeypad(
             listOf("1", "2", "3"),
             listOf("4", "5", "6"),
             listOf("7", "8", "9"),
-            listOf("DEL", "0", "OK")
+            listOf(".", "0", "-"),
+            listOf("DEL", "OK")
         )
 
         rows.forEach { row ->
@@ -235,14 +241,14 @@ fun Key(
 
     Box(
         modifier = modifier
-            .aspectRatio(1.5f) // Rectangular keys
+            .aspectRatio(if (isAction) 3.5f else 1.5f) // Action keys shorter than numbers
             .clip(RoundedCornerShape(16.dp))
             .background(containerColor)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (label == "DEL") {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Delete", tint = contentColor)
+            Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Delete", tint = contentColor)
         } else {
             Text(
                 text = label,

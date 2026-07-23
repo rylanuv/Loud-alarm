@@ -7,6 +7,7 @@ import com.loud.alarm.analytics.AnalyticsLogger
 import com.loud.alarm.data.Alarm
 import com.loud.alarm.data.AlarmRepository
 import com.loud.alarm.data.ChallengeType
+import com.loud.alarm.data.AdvancedMathTopic
 import com.loud.alarm.data.MathDifficulty
 import com.loud.alarm.data.SquatDetectionMode
 import com.loud.alarm.service.AlarmScheduler
@@ -35,11 +36,8 @@ class AlarmEditorViewModel @Inject constructor(
         val alarmId = savedStateHandle.get<Int>("alarmId")
         if (alarmId != null && alarmId != -1) {
             currentAlarmId = alarmId
-            // Start with current time; loadAlarm will overwrite once fetched
-            val calendar = Calendar.getInstance()
             _uiState = MutableStateFlow(AlarmUiState(
-                hour = calendar.get(Calendar.HOUR_OF_DAY),
-                minute = calendar.get(Calendar.MINUTE)
+                isLoadingAlarm = true
             ))
             loadAlarm(alarmId)
         } else {
@@ -55,7 +53,12 @@ class AlarmEditorViewModel @Inject constructor(
 
     private fun loadAlarm(id: Int) {
         viewModelScope.launch {
-            repository.getAlarm(id)?.let { alarm ->
+            val alarm = repository.getAlarm(id)
+            if (alarm == null) {
+                _uiState.value = _uiState.value.copy(isLoadingAlarm = false)
+                return@launch
+            }
+
                 _uiState.value = AlarmUiState(
                     hour = alarm.hour,
                     minute = alarm.minute,
@@ -90,9 +93,13 @@ class AlarmEditorViewModel @Inject constructor(
                     clockReadingDifficulty = alarm.clockReadingDifficulty,
                     clockReadingCount = alarm.clockReadingCount,
                     roomLightTargetLux = alarm.roomLightTargetLux,
-                    timePickerVersion = _uiState.value.timePickerVersion + 1
+                    advancedMathTopics = alarm.advancedMathTopics,
+                    advancedMathDifficulty = alarm.advancedMathDifficulty,
+                    advancedMathQuestionCount = alarm.advancedMathQuestionCount,
+                    advancedMathMuteWhileSolving = alarm.advancedMathMuteWhileSolving,
+                    timePickerVersion = _uiState.value.timePickerVersion + 1,
+                    isLoadingAlarm = false
                 )
-            }
         }
     }
 
@@ -211,6 +218,28 @@ class AlarmEditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(mathQuestionCount = count)
     }
 
+    fun toggleAdvancedMathTopic(topic: AdvancedMathTopic) {
+        val current = _uiState.value.advancedMathTopics.toMutableSet()
+        if (current.contains(topic)) {
+            if (current.size > 1) current.remove(topic) // Ensure at least one topic is selected
+        } else {
+            current.add(topic)
+        }
+        _uiState.value = _uiState.value.copy(advancedMathTopics = current)
+    }
+
+    fun updateAdvancedMathQuestionCount(count: Int) {
+        _uiState.value = _uiState.value.copy(advancedMathQuestionCount = count)
+    }
+
+    fun updateAdvancedMathDifficulty(difficulty: MathDifficulty) {
+        _uiState.value = _uiState.value.copy(advancedMathDifficulty = difficulty)
+    }
+
+    fun updateAdvancedMathMuteWhileSolving(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(advancedMathMuteWhileSolving = enabled)
+    }
+
     fun updateMemoryDifficulty(difficulty: MathDifficulty) {
         _uiState.value = _uiState.value.copy(memoryDifficulty = difficulty)
     }
@@ -300,6 +329,10 @@ class AlarmEditorViewModel @Inject constructor(
                 clockReadingDifficulty = state.clockReadingDifficulty,
                 clockReadingCount = state.clockReadingCount,
                 roomLightTargetLux = state.roomLightTargetLux,
+                advancedMathTopics = state.advancedMathTopics,
+                advancedMathDifficulty = state.advancedMathDifficulty,
+                advancedMathQuestionCount = state.advancedMathQuestionCount,
+                advancedMathMuteWhileSolving = state.advancedMathMuteWhileSolving,
                 enabled = true
             )
 
@@ -356,5 +389,10 @@ data class AlarmUiState(
     val clockReadingDifficulty: MathDifficulty = MathDifficulty.EASY,
     val clockReadingCount: Int = 1,
     val roomLightTargetLux: Int = 100,
-    val timePickerVersion: Int = 0
+    val advancedMathTopics: Set<AdvancedMathTopic> = setOf(AdvancedMathTopic.POLYNOMIAL),
+    val advancedMathDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val advancedMathQuestionCount: Int = 1,
+    val advancedMathMuteWhileSolving: Boolean = false,
+    val timePickerVersion: Int = 0,
+    val isLoadingAlarm: Boolean = false
 )

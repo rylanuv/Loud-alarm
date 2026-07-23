@@ -7,7 +7,11 @@ import androidx.room.TypeConverters
 import java.util.Locale
 
 enum class ChallengeType {
-    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, TAP_CHALLENGE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT, SQUAT, PUSH_UP, REVERSE_TYPING, AUDIO_MEMORY, CHARGER, CLOCK_READING, ROOM_LIGHT
+    NONE, MATH, QR_CODE, REWRITE, STEP, MAZE, MEMORY, SHAKE, TAP_CHALLENGE, SPELL_BEE, PUZZLE, SCAN_SINK, SCAN_OBJECT, SQUAT, PUSH_UP, REVERSE_TYPING, AUDIO_MEMORY, CHARGER, CLOCK_READING, ROOM_LIGHT, ADVANCED_MATH
+}
+
+enum class AdvancedMathTopic {
+    POLYNOMIAL, GEOMETRY, TRIGONOMETRY, CALCULUS, MATRIX, LOGARITHM, PROBABILITY, SEQUENCE
 }
 
 enum class MathDifficulty {
@@ -56,7 +60,11 @@ data class Alarm(
     val audioMemoryChallengeCount: Int = 3,
     val clockReadingDifficulty: MathDifficulty = MathDifficulty.EASY,
     val clockReadingCount: Int = 1,
-    val roomLightTargetLux: Int = 100
+    val roomLightTargetLux: Int = 100,
+    val advancedMathTopics: Set<AdvancedMathTopic> = setOf(AdvancedMathTopic.POLYNOMIAL),
+    val advancedMathDifficulty: MathDifficulty = MathDifficulty.EASY,
+    val advancedMathQuestionCount: Int = 1,
+    val advancedMathMuteWhileSolving: Boolean = false
 )
 
 class AlarmTypeConverters {
@@ -136,5 +144,22 @@ class AlarmTypeConverters {
     fun toStringSet(value: String): Set<String> {
         if (value.isBlank()) return emptySet()
         return value.split("|").filter { it.isNotBlank() }.toSet()
+    }
+
+    @TypeConverter
+    fun fromAdvancedMathTopicSet(set: Set<AdvancedMathTopic>): String {
+        return set.joinToString(",") { it.name }
+    }
+
+    @TypeConverter
+    fun toAdvancedMathTopicSet(value: String): Set<AdvancedMathTopic> {
+        if (value.isBlank()) return setOf(AdvancedMathTopic.POLYNOMIAL)
+        return value.split(",")
+            .mapNotNull { 
+                try { AdvancedMathTopic.valueOf(it.trim()) } 
+                catch (e: IllegalArgumentException) { null }
+            }
+            .toSet()
+            .ifEmpty { setOf(AdvancedMathTopic.POLYNOMIAL) }
     }
 }
